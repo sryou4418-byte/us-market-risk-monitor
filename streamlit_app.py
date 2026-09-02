@@ -19,7 +19,10 @@ html,body,[class*="css"],.stApp,.stMarkdown,.stCaption,button,input,textarea,sel
 .score-unit{font-size:20px;font-weight:650;letter-spacing:-.02em;color:#30323a}
 .risk-guide{font-size:13px;font-weight:600;color:#6b7280;background:#f3f4f6;border-radius:999px;padding:7px 11px;white-space:nowrap}
 .risk-label{font-size:18px;font-weight:750;margin-top:8px;color:#20232b}
-.delta-up{color:#e5484d}.delta-down{color:#2878d7}.delta-flat{color:#8b8f98}
+.delta-up{color:#e5484d!important;font-weight:750!important}.delta-down{color:#2878d7!important;font-weight:750!important}.delta-flat{color:#8b8f98!important;font-weight:650!important}
+.risk-state{display:flex;align-items:center;gap:6px;font-size:13px;color:#6b7280;margin-top:7px}.risk-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:0 0 8px}.risk-dot.vlow{background:#22a06b}.risk-dot.low{background:#78b84a}.risk-dot.mid{background:#e5b82e}.risk-dot.high{background:#ef8b2c}.risk-dot.vhigh{background:#e5484d}.risk-dot.na{background:#a1a1aa}
+.hero-state{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:750;margin-top:8px;color:#20232b}.hero-state .risk-dot{width:10px;height:10px;flex-basis:10px}
+.recession-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:8px}.recession-card{border:1px solid #e5e7eb;border-radius:16px;padding:11px 13px;background:rgba(255,255,255,.78);min-height:72px}.recession-name{font-size:12px;font-weight:700;color:#656b74;margin-bottom:6px}.recession-value{font-size:19px;font-weight:800;color:#282c34;line-height:1.15}
 .small{font-size:13px;color:#6b7280}.section{margin-top:30px;margin-bottom:10px}
 div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:14px}
 .data-status{font-size:12px;color:#6b7280;display:flex;align-items:center;gap:7px;margin:-2px 0 8px}.data-status span{width:7px;height:7px;border-radius:50%;background:#a1a1aa;animation:pulse 1.1s ease-in-out infinite}.data-status.done span{background:#22a06b;animation:none}
@@ -30,7 +33,6 @@ div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:
 .risk-title{display:flex;align-items:center;gap:5px;font-size:15px;font-weight:750;color:#20232b;margin-bottom:13px}
 .risk-score{font-size:27px;font-weight:850;line-height:1.05;letter-spacing:-.035em;color:#252831}
 .risk-score span{font-size:13px;font-weight:650;color:#6b7280;letter-spacing:0}
-.risk-state{font-size:13px;color:#6b7280;margin-top:7px}
 .info-icon{appearance:none;-webkit-appearance:none;border:0;background:transparent;padding:0;margin:0;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;font-size:11px;line-height:1;font-weight:800;color:#7b818b;cursor:help;position:relative;outline:none}
 .info-icon::before{content:'i';font-family:Arial,sans-serif}
 .info-icon:hover,.info-icon:focus,.info-icon:focus-visible{background:#eef0f3;color:#32363f}
@@ -51,15 +53,16 @@ div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:
   .section{margin-top:24px;margin-bottom:8px}.section h3{font-size:1.15rem!important}
   div[data-testid="stAlert"]{padding:14px 15px!important;border-radius:16px!important}
   div[data-testid="stAlert"] p{font-size:.93rem!important;line-height:1.58!important}
-  .risk-grid{grid-template-columns:1fr;gap:10px}
-  .risk-card{min-height:96px;padding:14px 15px}
-  .risk-title{font-size:14px;margin-bottom:10px}.risk-score{font-size:25px}
+  .risk-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+  .risk-card{min-height:104px;padding:13px 12px}
+  .risk-title{font-size:13px;margin-bottom:10px;gap:4px}.risk-score{font-size:23px}.risk-state{font-size:12px;gap:5px}.risk-dot{width:7px;height:7px;flex-basis:7px}
   .info-icon{width:18px;height:18px;font-size:11px;cursor:pointer}
   .info-tip{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.98);width:min(330px,86vw);font-size:13px;padding:14px 15px;border-radius:15px;box-shadow:0 18px 55px rgba(0,0,0,.20)}
   .info-icon:hover .info-tip,.info-icon:focus .info-tip,.info-icon:focus-visible .info-tip{transform:translate(-50%,-50%) scale(1)}
   .market-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
   .market-card{min-height:84px;padding:12px 12px}.market-name{font-size:12px;margin-bottom:7px}.market-value{font-size:19px}.market-delta{font-size:11px;white-space:normal}
   div[data-testid="stMetric"]{padding:12px}
+  .recession-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.recession-card{min-height:64px;padding:9px 8px;border-radius:14px}.recession-name{font-size:10.5px;margin-bottom:5px}.recession-value{font-size:16px}
 }
 </style>""", unsafe_allow_html=True)
 
@@ -419,6 +422,15 @@ def label(x):
     if x<=80:return "높음"
     return "매우 높음"
 
+def risk_class(x):
+    if pd.isna(x): return "na"
+    if x<=20: return "vlow"
+    if x<=40: return "low"
+    if x<=60: return "mid"
+    if x<=80: return "high"
+    return "vhigh"
+
+
 
 def delta_value(a,b):
     if pd.isna(a) or pd.isna(b): return None,"비교 불가","flat"
@@ -468,10 +480,10 @@ refresh_indicator(); _,delta_text,delta_class=delta_value(overall,prev_overall)
 
 st.markdown(f"""<div class="hero"><div class="small">위험지수</div><div class="score-row">
 <div class="hero-score">{overall:.1f}<span class="score-unit"> /100</span></div><div class="risk-guide">100에 가까울수록 위험</div>
-</div><div class="risk-label">{label(overall)}</div></div>""",unsafe_allow_html=True)
+</div><div class="hero-state"><span class="risk-dot {risk_class(overall)}"></span>{label(overall)}</div></div>""",unsafe_allow_html=True)
 cc1,cc2=st.columns([1,2])
 with cc1: st.markdown(f"**전일 비교** <span class='delta-{delta_class}'>{delta_text}</span>",unsafe_allow_html=True)
-with cc2: st.caption("▲ 위험 증가 · ▼ 위험 감소")
+with cc2: st.markdown("<span class='delta-up'>▲ 위험 증가</span> · <span class='delta-down'>▼ 위험 감소</span>",unsafe_allow_html=True)
 
 comments=[]
 if pd.notna(dev):
@@ -500,7 +512,7 @@ risk_cards=[]
 for k in scores:
     score_txt=f"{scores[k]:.1f}" if pd.notna(scores[k]) else "N/A"
     tip=infos[k].replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
-    risk_cards.append(f'<div class="risk-card"><div class="risk-title">{labels[k]}<button class="info-icon" aria-label="{labels[k]} 설명" type="button"><span class="info-tip">{tip}</span></button></div><div class="risk-score">{score_txt} <span>/100</span></div><div class="risk-state">{label(scores[k])}</div></div>')
+    risk_cards.append(f'<div class="risk-card"><div class="risk-title">{labels[k]}<button class="info-icon" aria-label="{labels[k]} 설명" type="button"><span class="info-tip">{tip}</span></button></div><div class="risk-score">{score_txt} <span>/100</span></div><div class="risk-state"><span class="risk-dot {risk_class(scores[k])}"></span>{label(scores[k])}</div></div>')
 st.markdown('<div class="risk-grid">'+''.join(risk_cards)+'</div>',unsafe_allow_html=True)
 st.caption("ⓘ 데스크톱에서는 마우스를 올리고, 모바일에서는 터치하면 계산에 반영되는 지표 설명을 볼 수 있습니다. 모든 위험점수는 0~100이며 카테고리 내부 세부지표 수와 관계없이 최종 종합지수에서는 카테고리 가중치만 적용합니다.")
 
@@ -563,10 +575,15 @@ if st.button("최근 1년 추이 불러오기",type="secondary"):
 else: st.caption("초기 로딩 속도를 위해 과거 추이 계산은 필요할 때만 실행합니다.")
 
 st.markdown('<div class="section"><h3>경기침체 신호</h3></div>',unsafe_allow_html=True)
-a,b,c=st.columns(3)
-a.metric("실업률",f"{latest(unemp):.1f}%")
-b.metric("Sahm Rule",f"{sahm_now:.2f}%p" if pd.notna(sahm_now) else "N/A")
-c.metric("침체 경보","발생" if pd.notna(sahm_now) and sahm_now>=.5 else "정상")
+_recession_status="발생" if pd.notna(sahm_now) and sahm_now>=.5 else "정상"
+# 명확한 3개 카드 구성
+_sahm_text=f"{sahm_now:.2f}%p" if pd.notna(sahm_now) else "N/A"
+_recession_html=(f'<div class="recession-grid">'
+                 f'<div class="recession-card"><div class="recession-name">실업률</div><div class="recession-value">{latest(unemp):.1f}%</div></div>'
+                 f'<div class="recession-card"><div class="recession-name">Sahm Rule</div><div class="recession-value">{_sahm_text}</div></div>'
+                 f'<div class="recession-card"><div class="recession-name">침체 경보</div><div class="recession-value">{_recession_status}</div></div>'
+                 '</div>')
+st.markdown(_recession_html,unsafe_allow_html=True)
 
 with st.expander("세부 데이터 및 계산 기준"):
     st.write("시장: S&P500의 200일 이동평균 대비 이격도를 이용한 과열 위험. 하락 스트레스는 이 점수에 직접 포함하지 않습니다.")
@@ -578,4 +595,4 @@ with st.expander("세부 데이터 및 계산 기준"):
     st.write("현재 2·10·30년물은 가능한 경우 미 재무부 공식 일일 수익률곡선의 더 최신 값을 우선 반영하며 기준금리는 일간 EFFR을 사용합니다.")
     st.write("환율: 원/달러, 엔/달러, 달러인덱스는 참고표시 전용이며 종합위험지수에는 포함하지 않습니다.")
 
-st.caption(f"Risk Monitor 3.28.0 Responsive Web Test · 화면 갱신 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} · 캐시 즉시 표시 · 백그라운드 최신화")
+st.caption(f"Risk Monitor 3.29.0 Responsive Web Test · 화면 갱신 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} · 캐시 즉시 표시 · 백그라운드 최신화")
