@@ -22,6 +22,38 @@ div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:
 .data-status{font-size:12px;color:#6b7280;display:flex;align-items:center;gap:7px;margin:-2px 0 8px}.data-status span{width:7px;height:7px;border-radius:50%;background:#a1a1aa;animation:pulse 1.1s ease-in-out infinite}.data-status.done span{background:#22a06b;animation:none}
 .loading-shell{border:1px solid #eceef1;border-radius:28px;padding:30px 32px;margin:20px 0;background:#fff}.loading-title,.loading-score,.loading-row span{background:linear-gradient(90deg,#f1f2f4 25%,#fafafa 50%,#f1f2f4 75%);background-size:200% 100%;animation:shimmer 1.2s infinite;border-radius:10px}.loading-title{height:18px;width:180px}.loading-score{height:58px;width:240px;margin-top:20px}.loading-row{display:flex;gap:12px;margin-top:24px}.loading-row span{display:block;height:70px;flex:1}.loading-text{font-size:13px;color:#8b8f98;margin-top:16px}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+.risk-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:10px}
+.risk-card{position:relative;border:1px solid #e5e7eb;border-radius:18px;padding:16px 17px;background:rgba(255,255,255,.78);min-height:118px}
+.risk-title{display:flex;align-items:center;gap:5px;font-size:15px;font-weight:750;color:#20232b;margin-bottom:13px}
+.risk-score{font-size:27px;font-weight:850;line-height:1.05;letter-spacing:-.035em;color:#252831}
+.risk-score span{font-size:13px;font-weight:650;color:#6b7280;letter-spacing:0}
+.risk-state{font-size:13px;color:#6b7280;margin-top:7px}
+.info-icon{appearance:none;-webkit-appearance:none;border:0;background:transparent;padding:0;margin:0;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;font-size:11px;line-height:1;font-weight:800;color:#7b818b;cursor:help;position:relative;outline:none}
+.info-icon::before{content:'i';font-family:Arial,sans-serif}
+.info-icon:hover,.info-icon:focus,.info-icon:focus-visible{background:#eef0f3;color:#32363f}
+.info-tip{visibility:hidden;opacity:0;pointer-events:none;position:absolute;z-index:999;left:50%;top:23px;transform:translateX(-50%) translateY(-2px);width:min(310px,76vw);padding:11px 12px;border:1px solid #dfe2e7;border-radius:12px;background:#fff;box-shadow:0 10px 30px rgba(0,0,0,.12);font-size:12.5px;font-weight:500;line-height:1.55;color:#3d424b;text-align:left;transition:opacity .12s ease,transform .12s ease}
+.info-icon:hover .info-tip,.info-icon:focus .info-tip,.info-icon:focus-visible .info-tip{visibility:visible;opacity:1;transform:translateX(-50%) translateY(0)}
+.market-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:10px}
+.market-card{border:1px solid #e5e7eb;border-radius:17px;padding:14px 15px;background:rgba(255,255,255,.78);min-height:94px}
+.market-name{font-size:13px;font-weight:700;color:#555b65;margin-bottom:9px}
+.market-value{font-size:22px;font-weight:820;letter-spacing:-.025em;color:#242832;line-height:1.1}
+.market-delta{font-size:12px;margin-top:7px;color:#6b7280;white-space:nowrap}
+@media(max-width:768px){
+  .block-container{padding-top:1rem;padding-left:14px;padding-right:14px;padding-bottom:3rem}
+  h1{font-size:1.75rem!important;line-height:1.15!important;letter-spacing:-.04em!important}
+  .hero{border-radius:22px;padding:22px 20px;margin:8px 0 18px}
+  .hero-score{font-size:50px}.score-unit{font-size:16px}.risk-guide{font-size:11px;padding:6px 9px}.risk-label{font-size:16px}
+  .section{margin-top:24px;margin-bottom:8px}.section h3{font-size:1.15rem!important}
+  .risk-grid{grid-template-columns:1fr;gap:10px}
+  .risk-card{min-height:96px;padding:14px 15px}
+  .risk-title{font-size:14px;margin-bottom:10px}.risk-score{font-size:25px}
+  .info-icon{width:18px;height:18px;font-size:11px;cursor:pointer}
+  .info-tip{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.98);width:min(330px,86vw);font-size:13px;padding:14px 15px;border-radius:15px;box-shadow:0 18px 55px rgba(0,0,0,.20)}
+  .info-icon:hover .info-tip,.info-icon:focus .info-tip,.info-icon:focus-visible .info-tip{transform:translate(-50%,-50%) scale(1)}
+  .market-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+  .market-card{min-height:84px;padding:12px 12px}.market-name{font-size:12px;margin-bottom:7px}.market-value{font-size:19px}.market-delta{font-size:11px;white-space:normal}
+  div[data-testid="stMetric"]{padding:12px}
+}
 </style>""", unsafe_allow_html=True)
 
 FRED_CSV="https://fred.stlouisfed.org/graph/fredgraph.csv?id={}"
@@ -451,43 +483,43 @@ labels={"시장추세":"시장 위험","변동성":"변동성 위험","금리":"
 infos={
     "시장추세":"시장 붕괴 여부가 아니라 S&P500의 과열 정도를 봅니다. 200일 이동평균 대비 이격도가 커질수록 과열 위험을 높게 평가합니다. 200일선 아래에서는 과열 위험이 낮아집니다.",
     "변동성":"VIX의 장기 상대 수준과 최근 5거래일 급등 정도를 함께 반영합니다. VIX가 높거나 짧은 기간에 급등하면 위험도가 올라갑니다.",
-    "금리":"기존 방식 그대로 10년물-2년물 금리차, 10년물-EFFR 차이, 10년물 국채수익률을 40%·35%·25%로 반영합니다.",
-    "신용":"하이일드 OAS와 BBB OAS의 절대 수준, 최근 약 20거래일 스프레드 확대 속도를 반영합니다. FRED의 ICE OAS 장기자료 제한 때문에 단순 3년 백분위만 사용하지 않습니다.",
+    "금리":"10년물-2년물 금리차, 10년물-EFFR 차이, 10년물 국채수익률을 각각 40%·35%·25%로 반영합니다.",
+    "신용":"하이일드 OAS와 BBB OAS의 절대 수준, 최근 약 20거래일 스프레드 확대 속도를 반영합니다. 단순 최근 3년 백분위만 사용하지 않습니다.",
     "경기":"실업률의 장기 상대 수준, Sahm Rule, 신규 실업수당 청구건수 4주 평균의 전년 대비 변화를 함께 반영합니다.",
     "물가":"헤드라인 CPI, 근원 CPI, 근원 PCE의 전년 대비 상승률을 각각 장기 상대 수준으로 환산해 종합합니다."
 }
-cols=st.columns(3)
-for i,k in enumerate(scores):
-    with cols[i%3]:
-        tcol,icol=st.columns([6,1],vertical_alignment="center")
-        with tcol: st.markdown(f"**{labels[k]}**")
-        with icol:
-            with st.popover("ⓘ",help=f"{labels[k]} 계산 설명"):
-                st.markdown(f"**{labels[k]}는 무엇을 반영하나?**")
-                st.write(infos[k])
-        st.markdown(f"<div style='font-size:26px;font-weight:800;line-height:1.15'>{scores[k]:.1f} <span style='font-size:14px;font-weight:600;color:#6b7280'>/100</span></div>",unsafe_allow_html=True)
-        st.caption(label(scores[k]))
-st.caption("모든 위험점수는 0~100이며, 100에 가까울수록 위험합니다. 각 카테고리 내부에 여러 세부지표를 사용하더라도 최종 종합지수에서는 카테고리 가중치만 적용합니다.")
+risk_cards=[]
+for k in scores:
+    score_txt=f"{scores[k]:.1f}" if pd.notna(scores[k]) else "N/A"
+    tip=infos[k].replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+    risk_cards.append(f'<div class="risk-card"><div class="risk-title">{labels[k]}<button class="info-icon" aria-label="{labels[k]} 설명" type="button"><span class="info-tip">{tip}</span></button></div><div class="risk-score">{score_txt} <span>/100</span></div><div class="risk-state">{label(scores[k])}</div></div>')
+st.markdown('<div class="risk-grid">'+''.join(risk_cards)+'</div>',unsafe_allow_html=True)
+st.caption("ⓘ 데스크톱에서는 마우스를 올리고, 모바일에서는 터치하면 계산에 반영되는 지표 설명을 볼 수 있습니다. 모든 위험점수는 0~100이며 카테고리 내부 세부지표 수와 관계없이 최종 종합지수에서는 카테고리 가중치만 적용합니다.")
 
 st.markdown('<div class="section"><h3>핵심 시장 상태</h3></div>',unsafe_allow_html=True)
-a,b,c,d=st.columns(4)
-a.metric("S&P 500",f"{latest(sp):,.2f}",f"{dev:+.1f}% vs 200일선" if pd.notna(dev) else None)
-b.metric("VIX",f"{latest(vix):.2f}",label(scores["변동성"]))
-c.metric("10년물 국채수익률",f"{latest(y10):.2f}%",f"10Y-EFFR {latest(spread10fed):+.2f}%p")
-d.metric("하이일드 스프레드",f"{latest(hy):.2f}%p",label(scores["신용"]))
-
 fx=_read_fx().get("items",{})
-e,f,g=st.columns(3)
-def fx_metric(col,name,decimals=2):
+def _fmt_fx(name,decimals=2):
     item=fx.get(name,{})
     v=item.get("value",np.nan); p=item.get("prev",np.nan)
-    if pd.isna(v): col.metric(name,"갱신 중…"); return
-    delta=None
+    if pd.isna(v): return "갱신 중…","최신 데이터 확인 중"
+    delta=""
     if pd.notna(p) and p!=0:
         ch=float(v-p); pct=ch/p*100; delta=f"{ch:+,.{decimals}f} ({pct:+.2f}%)"
-    col.metric(name,f"{v:,.{decimals}f}",delta)
-fx_metric(e,"원/달러",2); fx_metric(f,"엔/달러",2); fx_metric(g,"달러인덱스",2)
-st.caption("환율·달러인덱스는 참고용이며 위험지수 산식에는 포함하지 않습니다. 무료·API키 없는 Yahoo Finance 시장 데이터를 백그라운드에서 갱신합니다.")
+    return f"{v:,.{decimals}f}",delta
+
+market_items=[
+    ("S&P 500",f"{latest(sp):,.2f}",f"{dev:+.1f}% vs 200일선" if pd.notna(dev) else ""),
+    ("VIX",f"{latest(vix):.2f}",label(scores["변동성"])),
+    ("10년물 국채수익률",f"{latest(y10):.2f}%",f"10Y-EFFR {latest(spread10fed):+.2f}%p"),
+    ("하이일드 스프레드",f"{latest(hy):.2f}%p",label(scores["신용"])),
+]
+for _name in ("원/달러","엔/달러","달러인덱스"):
+    _v,_d=_fmt_fx(_name,2); market_items.append((_name,_v,_d))
+market_cards=[]
+for n,v,dlt in market_items:
+    market_cards.append(f'<div class="market-card"><div class="market-name">{n}</div><div class="market-value">{v}</div><div class="market-delta">{dlt}</div></div>')
+st.markdown('<div class="market-grid">'+''.join(market_cards)+'</div>',unsafe_allow_html=True)
+st.caption("환율·달러인덱스는 전일 대비 변화와 함께 표시하는 참고자료이며 위험지수 산식에는 포함하지 않습니다. 무료·API키 없는 시장 데이터를 백그라운드에서 갱신합니다.")
 
 @st.cache_data(ttl=3600,show_spinner=False)
 def historical_risk_fast(data):
@@ -528,4 +560,4 @@ with st.expander("세부 데이터 및 계산 기준"):
     st.write("현재 2·10·30년물은 가능한 경우 미 재무부 공식 일일 수익률곡선의 더 최신 값을 우선 반영하며 기준금리는 일간 EFFR을 사용합니다.")
     st.write("환율: 원/달러, 엔/달러, 달러인덱스는 참고표시 전용이며 종합위험지수에는 포함하지 않습니다.")
 
-st.caption(f"Risk Monitor 3.26.0 Web Test · 화면 갱신 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} · 캐시 즉시 표시 · 백그라운드 최신화")
+st.caption(f"Risk Monitor 3.27.0 Responsive Web Test · 화면 갱신 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} · 캐시 즉시 표시 · 백그라운드 최신화")
