@@ -559,8 +559,8 @@ market_info={
     "미국 10년물 국채수익률":"미국 10년 만기 국채의 시장 수익률입니다. 장기금리와 금융환경을 판단하는 대표 지표입니다.",
     "미국 30년물 국채수익률":"미국 30년 만기 국채의 시장 수익률입니다. 장기 성장·물가 기대와 장기 자금조달 여건을 반영합니다.",
     "실업률":"미국 노동시장에서 실업자가 차지하는 비율입니다. 경기 둔화와 고용시장 변화를 판단하는 핵심 지표입니다.",
-    "원/달러 환율":"미국 달러 1달러당 원화 가격입니다. 원화 가치와 달러 강세 정도를 참고하기 위한 지표입니다.",
-    "엔/달러 환율":"미국 달러 1달러당 일본 엔화 가격입니다. 엔화 가치와 글로벌 달러 흐름을 참고하는 지표입니다.",
+    "원/달러":"미국 달러 1달러당 원화 가격입니다. 원화 가치와 달러 강세 정도를 참고하기 위한 지표입니다.",
+    "엔/달러":"미국 달러 1달러당 일본 엔화 가격입니다. 엔화 가치와 글로벌 달러 흐름을 참고하는 지표입니다.",
     "달러인덱스":"주요 통화 대비 미국 달러의 상대적 강도를 나타내는 달러인덱스(DXY)입니다.",
     "하이일드 스프레드":"미국 투기등급 회사채가 국채보다 추가로 요구하는 금리입니다. 커질수록 신용시장 스트레스가 높다는 의미입니다.",
     "CPI":"미국 소비자물가지수의 전년 대비 상승률입니다. 소비자가 체감하는 전반적인 물가 압력을 보여줍니다."
@@ -588,7 +588,7 @@ market_items.append(("CPI",v,dlt,cls))
 
 market_cards=[]
 for n,v,dlt,cls in market_items:
-    tip=market_info[n].replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+    tip=market_info.get(n,"현재값과 직전값을 비교해 시장 상태를 참고하는 지표입니다.").replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
     market_cards.append(
         f'<div class="market-card"><div class="market-name">{n}'
         f'<button class="info-icon" aria-label="{n} 설명" type="button"><span class="info-tip">{tip}</span></button>'
@@ -641,4 +641,4 @@ with st.expander("세부 데이터 및 계산 기준"):
     st.write("현재 2·10·30년물은 가능한 경우 미 재무부 공식 일일 수익률곡선의 더 최신 값을 우선 반영하며 기준금리는 일간 EFFR을 사용합니다.")
     st.write("환율: 원/달러, 엔/달러, 달러인덱스는 참고표시 전용이며 종합위험지수에는 포함하지 않습니다.")
 
-st.caption(f"Risk Monitor 3.30.0 Responsive Web Test · 화면 갱신 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} · 캐시 즉시 표시 · 백그라운드 최신화")
+st.caption(f"Risk Monitor 3.30.1 Responsive Web Test · 화면 갱신 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} · 캐시 즉시 표시 · 백그라운드 최신화")
