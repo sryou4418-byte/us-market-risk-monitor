@@ -9,7 +9,10 @@ from urllib.parse import quote
 
 st.set_page_config(page_title="미국 증시 종합 위험지수", page_icon="🇺🇸", layout="wide")
 st.markdown("""<style>
-.block-container{max-width:1180px;padding-top:2rem;padding-bottom:4rem}
+:root{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Apple SD Gothic Neo","Noto Sans KR","Segoe UI",sans-serif}
+html,body,[class*="css"],.stApp,.stMarkdown,.stCaption,button,input,textarea,select{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Apple SD Gothic Neo","Noto Sans KR","Segoe UI",sans-serif!important}
+.block-container{max-width:1180px;padding-top:2.2rem;padding-bottom:4rem}
+.dev-credit{font-size:12px;color:#8b8f98;font-weight:600;letter-spacing:-.01em;margin-top:-.35rem;margin-bottom:.35rem}
 .hero{border:1px solid #e5e7eb;border-radius:28px;padding:30px 32px;margin:12px 0 22px;background:rgba(255,255,255,.72)}
 .hero-score{font-size:64px;line-height:1;font-weight:850;letter-spacing:-.06em;color:#30323a}
 .score-row{display:flex;align-items:baseline;gap:14px;margin-top:6px;flex-wrap:wrap}
@@ -39,11 +42,15 @@ div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:
 .market-value{font-size:22px;font-weight:820;letter-spacing:-.025em;color:#242832;line-height:1.1}
 .market-delta{font-size:12px;margin-top:7px;color:#6b7280;white-space:nowrap}
 @media(max-width:768px){
-  .block-container{padding-top:1rem;padding-left:14px;padding-right:14px;padding-bottom:3rem}
-  h1{font-size:1.75rem!important;line-height:1.15!important;letter-spacing:-.04em!important}
+  .block-container{padding-top:calc(env(safe-area-inset-top,0px) + 2.65rem)!important;padding-left:14px!important;padding-right:14px!important;padding-bottom:3rem}
+  h1{font-size:1.72rem!important;line-height:1.18!important;letter-spacing:-.045em!important;margin-top:0!important;margin-bottom:.55rem!important;font-weight:800!important}
+  .dev-credit{font-size:11px;margin-top:-.2rem;margin-bottom:.45rem}
+  p,li,div{letter-spacing:-.015em}
   .hero{border-radius:22px;padding:22px 20px;margin:8px 0 18px}
   .hero-score{font-size:50px}.score-unit{font-size:16px}.risk-guide{font-size:11px;padding:6px 9px}.risk-label{font-size:16px}
   .section{margin-top:24px;margin-bottom:8px}.section h3{font-size:1.15rem!important}
+  div[data-testid="stAlert"]{padding:14px 15px!important;border-radius:16px!important}
+  div[data-testid="stAlert"] p{font-size:.93rem!important;line-height:1.58!important}
   .risk-grid{grid-template-columns:1fr;gap:10px}
   .risk-card{min-height:96px;padding:14px 15px}
   .risk-title{font-size:14px;margin-bottom:10px}.risk-score{font-size:25px}
@@ -455,6 +462,7 @@ prev={"시장추세":prev_market,"변동성":prev_vol,"금리":prev_rate,"신용
 prev_overall=weighted(prev)
 
 st.title("미국 증시 종합 위험지수")
+st.markdown('<div class="dev-credit">Developed by 유유상</div>', unsafe_allow_html=True)
 st.caption("시장·금리·신용·경기·물가를 현재 공개 데이터 기준으로 자동 분석")
 refresh_indicator(); _,delta_text,delta_class=delta_value(overall,prev_overall)
 
@@ -501,23 +509,33 @@ fx=_read_fx().get("items",{})
 def _fmt_fx(name,decimals=2):
     item=fx.get(name,{})
     v=item.get("value",np.nan); p=item.get("prev",np.nan)
-    if pd.isna(v): return "갱신 중…","최신 데이터 확인 중"
-    delta=""
+    if pd.isna(v): return "갱신 중…","최신 데이터 확인 중","flat"
+    delta=""; cls="flat"
     if pd.notna(p) and p!=0:
-        ch=float(v-p); pct=ch/p*100; delta=f"{ch:+,.{decimals}f} ({pct:+.2f}%)"
-    return f"{v:,.{decimals}f}",delta
+        ch=float(v-p); pct=ch/p*100
+        if ch>0:
+            cls="up"; delta=f"▲ {abs(ch):,.{decimals}f} (+{abs(pct):.2f}%)"
+        elif ch<0:
+            cls="down"; delta=f"▼ {abs(ch):,.{decimals}f} (-{abs(pct):.2f}%)"
+        else:
+            delta=f"— 0.{('0'*decimals)} (0.00%)"
+    return f"{v:,.{decimals}f}",delta,cls
+
+def _sign_class(x):
+    if pd.isna(x) or abs(float(x))<1e-12: return "flat"
+    return "up" if float(x)>0 else "down"
 
 market_items=[
-    ("S&P 500",f"{latest(sp):,.2f}",f"{dev:+.1f}% vs 200일선" if pd.notna(dev) else ""),
-    ("VIX",f"{latest(vix):.2f}",label(scores["변동성"])),
-    ("10년물 국채수익률",f"{latest(y10):.2f}%",f"10Y-EFFR {latest(spread10fed):+.2f}%p"),
-    ("하이일드 스프레드",f"{latest(hy):.2f}%p",label(scores["신용"])),
+    ("S&P 500",f"{latest(sp):,.2f}",f"{'▲' if dev>0 else '▼' if dev<0 else '—'} {abs(dev):.1f}% vs 200일선" if pd.notna(dev) else "",_sign_class(dev)),
+    ("VIX",f"{latest(vix):.2f}",label(scores["변동성"]),"flat"),
+    ("10년물 국채수익률",f"{latest(y10):.2f}%",f"10Y-EFFR {latest(spread10fed):+.2f}%p","flat"),
+    ("하이일드 스프레드",f"{latest(hy):.2f}%p",label(scores["신용"]),"flat"),
 ]
 for _name in ("원/달러","엔/달러","달러인덱스"):
-    _v,_d=_fmt_fx(_name,2); market_items.append((_name,_v,_d))
+    _v,_d,_cls=_fmt_fx(_name,2); market_items.append((_name,_v,_d,_cls))
 market_cards=[]
-for n,v,dlt in market_items:
-    market_cards.append(f'<div class="market-card"><div class="market-name">{n}</div><div class="market-value">{v}</div><div class="market-delta">{dlt}</div></div>')
+for n,v,dlt,cls in market_items:
+    market_cards.append(f'<div class="market-card"><div class="market-name">{n}</div><div class="market-value">{v}</div><div class="market-delta delta-{cls}">{dlt}</div></div>')
 st.markdown('<div class="market-grid">'+''.join(market_cards)+'</div>',unsafe_allow_html=True)
 st.caption("환율·달러인덱스는 전일 대비 변화와 함께 표시하는 참고자료이며 위험지수 산식에는 포함하지 않습니다. 무료·API키 없는 시장 데이터를 백그라운드에서 갱신합니다.")
 
@@ -560,4 +578,4 @@ with st.expander("세부 데이터 및 계산 기준"):
     st.write("현재 2·10·30년물은 가능한 경우 미 재무부 공식 일일 수익률곡선의 더 최신 값을 우선 반영하며 기준금리는 일간 EFFR을 사용합니다.")
     st.write("환율: 원/달러, 엔/달러, 달러인덱스는 참고표시 전용이며 종합위험지수에는 포함하지 않습니다.")
 
-st.caption(f"Risk Monitor 3.27.0 Responsive Web Test · 화면 갱신 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} · 캐시 즉시 표시 · 백그라운드 최신화")
+st.caption(f"Risk Monitor 3.28.0 Responsive Web Test · 화면 갱신 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} · 캐시 즉시 표시 · 백그라운드 최신화")
