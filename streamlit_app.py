@@ -1,9 +1,11 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import requests, csv, os, threading, shutil, json, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path as _Path
 from urllib.parse import quote
 
@@ -33,7 +35,7 @@ div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:
 .risk-title{display:flex;align-items:center;gap:5px;font-size:15px;font-weight:750;color:#20232b;margin-bottom:13px}
 .risk-score{font-size:27px;font-weight:850;line-height:1.05;letter-spacing:-.035em;color:#252831}
 .risk-score span{font-size:13px;font-weight:650;color:#6b7280;letter-spacing:0}
-.info-icon{appearance:none;-webkit-appearance:none;border:1.4px solid #7b818b;background:transparent;padding:0;margin:0;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;font-size:10px;line-height:1;font-weight:800;color:#626975;cursor:help;position:relative;outline:none;box-sizing:border-box}
+.info-icon{appearance:none;-webkit-appearance:none;border:1.2px solid #7b818b;background:transparent;padding:0;margin:0;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;font-size:9px;line-height:1;font-weight:800;color:#626975;cursor:help;position:relative;outline:none;box-sizing:border-box}
 .info-icon::before{content:'i';font-family:Arial,sans-serif}
 .info-icon:hover,.info-icon:focus,.info-icon:focus-visible{background:#eef0f3;color:#32363f;border-color:#32363f}
 .info-tip{visibility:hidden;opacity:0;pointer-events:none;position:absolute;z-index:999;left:50%;top:23px;transform:translateX(-50%) translateY(-2px);width:min(310px,76vw);padding:11px 12px;border:1px solid #dfe2e7;border-radius:12px;background:#fff;box-shadow:0 10px 30px rgba(0,0,0,.12);font-size:12.5px;font-weight:500;line-height:1.55;color:#3d424b;text-align:left;transition:opacity .12s ease,transform .12s ease}
@@ -56,7 +58,7 @@ div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:
   .risk-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
   .risk-card{min-height:104px;padding:13px 12px}
   .risk-title{font-size:13px;margin-bottom:10px;gap:4px}.risk-score{font-size:23px}.risk-state{font-size:12px;gap:5px}.risk-dot{width:7px;height:7px;flex-basis:7px}
-  .info-icon{width:18px;height:18px;font-size:11px;cursor:pointer}
+  .info-icon{width:14px;height:14px;font-size:9px;border-width:1px;cursor:pointer}
   .info-tip{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.98);width:min(330px,86vw);font-size:13px;padding:14px 15px;border-radius:15px;box-shadow:0 18px 55px rgba(0,0,0,.20)}
   .info-icon:hover .info-tip,.info-icon:focus .info-tip,.info-icon:focus-visible .info-tip{transform:translate(-50%,-50%) scale(1)}
   .market-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
@@ -304,7 +306,7 @@ def refresh_indicator():
         st.session_state.refresh_applied=True; st.rerun()
     if st.session_state.get("refresh_applied"):
         try:
-            info=json.loads(REFRESH_STATUS.read_text(encoding="utf-8")); ts=datetime.fromtimestamp(info.get("finished",time.time())).strftime("%H:%M")
+            info=json.loads(REFRESH_STATUS.read_text(encoding="utf-8")); ts=datetime.fromtimestamp(info.get("finished",time.time()), tz=ZoneInfo("Asia/Seoul")).strftime("%H:%M KST")
             st.markdown(f"<div class='data-status done'><span></span>최신 데이터 · {ts}</div>",unsafe_allow_html=True)
         except Exception: st.markdown("<div class='data-status done'><span></span>최신 데이터</div>",unsafe_allow_html=True)
     else: st.markdown("<div class='data-status'><span></span>최신 데이터 확인 중…</div>",unsafe_allow_html=True)
@@ -512,7 +514,6 @@ for k in scores:
     tip=infos[k].replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
     risk_cards.append(f'<div class="risk-card"><div class="risk-title">{labels[k]}<button class="info-icon" aria-label="{labels[k]} 설명" type="button"><span class="info-tip">{tip}</span></button></div><div class="risk-score">{score_txt} <span>/100</span></div><div class="risk-state"><span class="risk-dot {risk_class(scores[k])}"></span>{label(scores[k])}</div></div>')
 st.markdown('<div class="risk-grid">'+''.join(risk_cards)+'</div>',unsafe_allow_html=True)
-st.caption("ⓘ 데스크톱에서는 마우스를 올리고, 모바일에서는 터치하면 계산에 반영되는 지표 설명을 볼 수 있습니다. 모든 위험점수는 0~100이며 카테고리 내부 세부지표 수와 관계없이 최종 종합지수에서는 카테고리 가중치만 적용합니다.")
 
 st.markdown('<div class="section"><h3>핵심 시장 상태</h3></div>',unsafe_allow_html=True)
 fx=_read_fx().get("items",{})
@@ -613,10 +614,38 @@ def historical_risk_fast(data):
         rows.append((dt,weighted({"시장추세":mm,"변동성":vv,"금리":rr,"신용":cr,"경기":ec,"물가":inf})))
     return pd.DataFrame(rows,columns=["date","risk"]).set_index("date") if rows else pd.DataFrame(columns=["risk"])
 
+def render_history_chart(hist):
+    # 기본 차트 대신 가벼운 SVG를 사용해 한국식 표기와 모바일 터치 종료 시 툴팁 숨김을 보장합니다.
+    rows=[]
+    for dt,val in hist["risk"].dropna().items():
+        dt=pd.Timestamp(dt)
+        rows.append({"date":f"{dt.year}년 {dt.month}월 {dt.day}일","year":int(dt.year),"month":int(dt.month),"risk":round(float(val),1)})
+    payload=json.dumps(rows,ensure_ascii=False)
+    chart_html=f'''<div id="riskChartWrap" style="width:100%;height:320px;position:relative;font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR','Segoe UI',sans-serif;touch-action:pan-y;">
+<svg id="riskChart" width="100%" height="320" style="overflow:visible"></svg>
+<div id="riskTip" style="display:none;position:absolute;pointer-events:none;background:#fff;border:1px solid #dfe2e7;border-radius:10px;padding:8px 10px;box-shadow:0 8px 24px rgba(0,0,0,.13);font-size:12px;line-height:1.55;color:#30343b;white-space:nowrap;z-index:5"></div></div>
+<script>(()=>{{
+const data={payload},svg=document.getElementById('riskChart'),wrap=document.getElementById('riskChartWrap'),tip=document.getElementById('riskTip');if(!data.length)return;
+const NS='http://www.w3.org/2000/svg',W=Math.max(320,wrap.clientWidth),H=320,L=52,R=14,T=18,B=46,PW=W-L-R,PH=H-T-B;svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+const vals=data.map(d=>d.risk),rawMin=Math.min(...vals),rawMax=Math.max(...vals),ymin=Math.max(0,Math.floor((rawMin-5)/10)*10),ymax=Math.min(100,Math.ceil((rawMax+5)/10)*10||ymin+10);
+const x=i=>L+(data.length===1?PW/2:i*PW/(data.length-1)),y=v=>T+(ymax-v)*PH/(ymax-ymin||1),el=(n,a={{}})=>{{const q=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>q.setAttribute(k,v));return q}};
+for(let j=0;j<=4;j++){{const v=ymin+(ymax-ymin)*j/4,yy=y(v);svg.appendChild(el('line',{{x1:L,y1:yy,x2:W-R,y2:yy,stroke:'#eceef1','stroke-width':'1'}}));const t=el('text',{{x:L-10,y:yy+4,'text-anchor':'end',fill:'#7a8089','font-size':'12'}});t.textContent=v.toFixed(1);svg.appendChild(t)}}
+const ticks=[];data.forEach((d,i)=>{{if(i===0||i===data.length-1||d.month===1||i%2===0)ticks.push(i)}});[...new Set(ticks)].forEach(i=>{{const d=data[i],t=el('text',{{x:x(i),y:H-14,'text-anchor':'middle',fill:'#7a8089','font-size':'12'}});t.textContent=(i===0||d.month===1)?`${{d.year}}년 ${{d.month}}월`:`${{d.month}}월`;svg.appendChild(t)}});
+svg.appendChild(el('polyline',{{points:data.map((d,i)=>`${{x(i)}},${{y(d.risk)}}`).join(' '),fill:'none',stroke:'#5a67d8','stroke-width':'2.5','stroke-linejoin':'round','stroke-linecap':'round','vector-effect':'non-scaling-stroke'}}));data.forEach((d,i)=>svg.appendChild(el('circle',{{cx:x(i),cy:y(d.risk),r:'3.2',fill:'#fff',stroke:'#5a67d8','stroke-width':'2','vector-effect':'non-scaling-stroke'}})));
+const show=clientX=>{{const rect=wrap.getBoundingClientRect(),px=Math.max(0,Math.min(rect.width,clientX-rect.left)),idx=Math.max(0,Math.min(data.length-1,Math.round(px/rect.width*(data.length-1)))),d=data[idx];tip.innerHTML=`<b>날짜</b> ${{d.date}}<br><b>위험지수</b> ${{d.risk.toFixed(1)}}`;tip.style.display='block';requestAnimationFrame(()=>{{let left=px+12;if(left+tip.offsetWidth>rect.width)left=px-tip.offsetWidth-12;tip.style.left=Math.max(4,left)+'px';tip.style.top=Math.max(6,(y(d.risk)/H*rect.height)-tip.offsetHeight-10)+'px'}})}},hide=()=>tip.style.display='none';
+wrap.addEventListener('mousemove',e=>show(e.clientX));wrap.addEventListener('mouseleave',hide);wrap.addEventListener('touchstart',e=>{{if(e.touches[0])show(e.touches[0].clientX)}},{{passive:true}});wrap.addEventListener('touchmove',e=>{{if(e.touches[0])show(e.touches[0].clientX)}},{{passive:true}});wrap.addEventListener('touchend',hide,{{passive:true}});wrap.addEventListener('touchcancel',hide,{{passive:true}});
+}})();</script>'''
+    components.html(chart_html,height=330,scrolling=False)
+
 st.markdown('<div class="section"><h3>종합위험지수 추이</h3></div>',unsafe_allow_html=True)
+if "show_history" not in st.session_state: st.session_state.show_history=False
 if st.button("최근 1년 추이 불러오기",type="secondary"):
+    st.session_state.show_history=True
+if st.session_state.show_history:
     with st.spinner("추이 계산 중…"): hist=historical_risk_fast(data)
-    if len(hist): st.line_chart(hist,height=320); st.caption("최근 1년 월별 스냅샷 · 버튼을 눌렀을 때만 계산")
+    if len(hist):
+        render_history_chart(hist)
+        st.caption("최근 1년 월별 스냅샷 · 최초 계산 후 서버 공용 캐시를 최대 1시간 재사용")
     else: st.warning("과거 위험지수를 계산할 데이터가 부족합니다.")
 else: st.caption("초기 로딩 속도를 위해 과거 추이 계산은 필요할 때만 실행합니다.")
 
@@ -641,4 +670,4 @@ with st.expander("세부 데이터 및 계산 기준"):
     st.write("현재 2·10·30년물은 가능한 경우 미 재무부 공식 일일 수익률곡선의 더 최신 값을 우선 반영하며 기준금리는 일간 EFFR을 사용합니다.")
     st.write("환율: 원/달러, 엔/달러, 달러인덱스는 참고표시 전용이며 종합위험지수에는 포함하지 않습니다.")
 
-st.caption(f"Risk Monitor 3.30.1 Responsive Web Test · 화면 갱신 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} · 캐시 즉시 표시 · 백그라운드 최신화")
+st.caption(f"Risk Monitor 3.31.0 Responsive Web Test · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime('%Y-%m-%d %H:%M:%S KST')} · 캐시 즉시 표시 · 백그라운드 최신화")
