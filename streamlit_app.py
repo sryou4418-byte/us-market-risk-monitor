@@ -621,20 +621,21 @@ def render_history_chart(hist):
         dt=pd.Timestamp(dt)
         rows.append({"date":f"{dt.year}년 {dt.month}월 {dt.day}일","year":int(dt.year),"month":int(dt.month),"risk":round(float(val),1)})
     payload=json.dumps(rows,ensure_ascii=False)
-    chart_html=f'''<div id="riskChartWrap" style="width:100%;height:320px;position:relative;font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR','Segoe UI',sans-serif;touch-action:pan-y;">
+    chart_html='''<div id="riskChartWrap" style="width:100%;height:320px;position:relative;font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR','Segoe UI',sans-serif;touch-action:pan-y;">
 <svg id="riskChart" width="100%" height="320" style="overflow:visible"></svg>
 <div id="riskTip" style="display:none;position:absolute;pointer-events:none;background:#fff;border:1px solid #dfe2e7;border-radius:10px;padding:8px 10px;box-shadow:0 8px 24px rgba(0,0,0,.13);font-size:12px;line-height:1.55;color:#30343b;white-space:nowrap;z-index:5"></div></div>
-<script>(()=>{{
-const data={payload},svg=document.getElementById('riskChart'),wrap=document.getElementById('riskChartWrap'),tip=document.getElementById('riskTip');if(!data.length)return;
+<script>(()=>{
+const data=__PAYLOAD__,svg=document.getElementById('riskChart'),wrap=document.getElementById('riskChartWrap'),tip=document.getElementById('riskTip');if(!data.length)return;
 const NS='http://www.w3.org/2000/svg',W=Math.max(320,wrap.clientWidth),H=320,L=52,R=14,T=18,B=46,PW=W-L-R,PH=H-T-B;svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
 const vals=data.map(d=>d.risk),rawMin=Math.min(...vals),rawMax=Math.max(...vals),ymin=Math.max(0,Math.floor((rawMin-5)/10)*10),ymax=Math.min(100,Math.ceil((rawMax+5)/10)*10||ymin+10);
-const x=i=>L+(data.length===1?PW/2:i*PW/(data.length-1)),y=v=>T+(ymax-v)*PH/(ymax-ymin||1),el=(n,a={{}})=>{{const q=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>q.setAttribute(k,v));return q}};
-for(let j=0;j<=4;j++){{const v=ymin+(ymax-ymin)*j/4,yy=y(v);svg.appendChild(el('line',{{x1:L,y1:yy,x2:W-R,y2:yy,stroke:'#eceef1','stroke-width':'1'}}));const t=el('text',{{x:L-10,y:yy+4,'text-anchor':'end',fill:'#7a8089','font-size':'12'}});t.textContent=v.toFixed(1);svg.appendChild(t)}}
-const ticks=[];data.forEach((d,i)=>{{if(i===0||i===data.length-1||d.month===1||i%2===0)ticks.push(i)}});[...new Set(ticks)].forEach(i=>{{const d=data[i],t=el('text',{{x:x(i),y:H-14,'text-anchor':'middle',fill:'#7a8089','font-size':'12'}});t.textContent=(i===0||d.month===1)?`${{d.year}}년 ${{d.month}}월`:`${{d.month}}월`;svg.appendChild(t)}});
-svg.appendChild(el('polyline',{{points:data.map((d,i)=>`${{x(i)}},${{y(d.risk)}}`).join(' '),fill:'none',stroke:'#5a67d8','stroke-width':'2.5','stroke-linejoin':'round','stroke-linecap':'round','vector-effect':'non-scaling-stroke'}}));data.forEach((d,i)=>svg.appendChild(el('circle',{{cx:x(i),cy:y(d.risk),r:'3.2',fill:'#fff',stroke:'#5a67d8','stroke-width':'2','vector-effect':'non-scaling-stroke'}})));
-const show=clientX=>{{const rect=wrap.getBoundingClientRect(),px=Math.max(0,Math.min(rect.width,clientX-rect.left)),idx=Math.max(0,Math.min(data.length-1,Math.round(px/rect.width*(data.length-1)))),d=data[idx];tip.innerHTML=`<b>날짜</b> ${{d.date}}<br><b>위험지수</b> ${{d.risk.toFixed(1)}}`;tip.style.display='block';requestAnimationFrame(()=>{{let left=px+12;if(left+tip.offsetWidth>rect.width)left=px-tip.offsetWidth-12;tip.style.left=Math.max(4,left)+'px';tip.style.top=Math.max(6,(y(d.risk)/H*rect.height)-tip.offsetHeight-10)+'px'}})}},hide=()=>tip.style.display='none';
-wrap.addEventListener('mousemove',e=>show(e.clientX));wrap.addEventListener('mouseleave',hide);wrap.addEventListener('touchstart',e=>{{if(e.touches[0])show(e.touches[0].clientX)}},{{passive:true}});wrap.addEventListener('touchmove',e=>{{if(e.touches[0])show(e.touches[0].clientX)}},{{passive:true}});wrap.addEventListener('touchend',hide,{{passive:true}});wrap.addEventListener('touchcancel',hide,{{passive:true}});
-}})();</script>'''
+const x=i=>L+(data.length===1?PW/2:i*PW/(data.length-1)),y=v=>T+(ymax-v)*PH/(ymax-ymin||1),el=(n,a={})=>{const q=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>q.setAttribute(k,v));return q};
+for(let j=0;j<=4;j++){const v=ymin+(ymax-ymin)*j/4,yy=y(v);svg.appendChild(el('line',{x1:L,y1:yy,x2:W-R,y2:yy,stroke:'#eceef1','stroke-width':'1'}));const t=el('text',{x:L-10,y:yy+4,'text-anchor':'end',fill:'#7a8089','font-size':'12'});t.textContent=v.toFixed(1);svg.appendChild(t)}
+const ticks=[];data.forEach((d,i)=>{if(i===0||i===data.length-1||d.month===1||i%2===0)ticks.push(i)});[...new Set(ticks)].forEach(i=>{const d=data[i],t=el('text',{x:x(i),y:H-14,'text-anchor':'middle',fill:'#7a8089','font-size':'12'});t.textContent=(i===0||d.month===1)?`${d.year}년 ${d.month}월`:`${d.month}월`;svg.appendChild(t)});
+svg.appendChild(el('polyline',{points:data.map((d,i)=>`${x(i)},${y(d.risk)}`).join(' '),fill:'none',stroke:'#5a67d8','stroke-width':'2.5','stroke-linejoin':'round','stroke-linecap':'round','vector-effect':'non-scaling-stroke'}));data.forEach((d,i)=>svg.appendChild(el('circle',{cx:x(i),cy:y(d.risk),r:'3.2',fill:'#fff',stroke:'#5a67d8','stroke-width':'2','vector-effect':'non-scaling-stroke'})));
+const show=clientX=>{const rect=wrap.getBoundingClientRect(),px=Math.max(0,Math.min(rect.width,clientX-rect.left)),idx=Math.max(0,Math.min(data.length-1,Math.round(px/rect.width*(data.length-1)))),d=data[idx];tip.innerHTML=`<b>날짜</b> ${d.date}<br><b>위험지수</b> ${d.risk.toFixed(1)}`;tip.style.display='block';requestAnimationFrame(()=>{let left=px+12;if(left+tip.offsetWidth>rect.width)left=px-tip.offsetWidth-12;tip.style.left=Math.max(4,left)+'px';tip.style.top=Math.max(6,(y(d.risk)/H*rect.height)-tip.offsetHeight-10)+'px'})},hide=()=>tip.style.display='none';
+wrap.addEventListener('mousemove',e=>show(e.clientX));wrap.addEventListener('mouseleave',hide);wrap.addEventListener('touchstart',e=>{if(e.touches[0])show(e.touches[0].clientX)},{passive:true});wrap.addEventListener('touchmove',e=>{if(e.touches[0])show(e.touches[0].clientX)},{passive:true});wrap.addEventListener('touchend',hide,{passive:true});wrap.addEventListener('touchcancel',hide,{passive:true});document.addEventListener('touchstart',e=>{if(!wrap.contains(e.target))hide()},{passive:true});
+})();</script>'''
+    chart_html=chart_html.replace("__PAYLOAD__",payload)
     components.html(chart_html,height=330,scrolling=False)
 
 st.markdown('<div class="section"><h3>종합위험지수 추이</h3></div>',unsafe_allow_html=True)
@@ -670,4 +671,4 @@ with st.expander("세부 데이터 및 계산 기준"):
     st.write("현재 2·10·30년물은 가능한 경우 미 재무부 공식 일일 수익률곡선의 더 최신 값을 우선 반영하며 기준금리는 일간 EFFR을 사용합니다.")
     st.write("환율: 원/달러, 엔/달러, 달러인덱스는 참고표시 전용이며 종합위험지수에는 포함하지 않습니다.")
 
-st.caption(f"Risk Monitor 3.31.0 Responsive Web Test · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime('%Y-%m-%d %H:%M:%S KST')} · 캐시 즉시 표시 · 백그라운드 최신화")
+st.caption(f"Risk Monitor 3.31.1 Responsive Web Hotfix · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime('%Y-%m-%d %H:%M:%S KST')} · 캐시 즉시 표시 · 백그라운드 최신화")
