@@ -23,7 +23,7 @@ html,body,[class*="css"],.stApp,.stMarkdown,.stCaption,button,input,textarea,sel
 .risk-state{display:flex;align-items:center;gap:6px;font-size:13px;color:#6b7280;margin-top:7px}.risk-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:0 0 8px}.risk-dot.vlow{background:#22a06b}.risk-dot.low{background:#78b84a}.risk-dot.mid{background:#e5b82e}.risk-dot.high{background:#ef8b2c}.risk-dot.vhigh{background:#e5484d}.risk-dot.na{background:#a1a1aa}
 .hero-state{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:750;margin-top:8px;color:#20232b}.hero-state .risk-dot{width:10px;height:10px;flex-basis:10px}
 .recession-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:8px}.recession-card{border:1px solid #e5e7eb;border-radius:16px;padding:11px 13px;background:rgba(255,255,255,.78);min-height:72px}.recession-name{font-size:12px;font-weight:700;color:#656b74;margin-bottom:6px}.recession-value{font-size:19px;font-weight:800;color:#282c34;line-height:1.15}
-.small{font-size:13px;color:#6b7280}.section{margin-top:30px;margin-bottom:10px}
+.small{font-size:13px;color:#6b7280}.hero-title{font-size:15px;font-weight:800;color:#555b65}.section{margin-top:30px;margin-bottom:10px}
 div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:14px}
 .data-status{font-size:12px;color:#6b7280;display:flex;align-items:center;gap:7px;margin:-2px 0 8px}.data-status span{width:7px;height:7px;border-radius:50%;background:#a1a1aa;animation:pulse 1.1s ease-in-out infinite}.data-status.done span{background:#22a06b;animation:none}
 .loading-shell{border:1px solid #eceef1;border-radius:28px;padding:30px 32px;margin:20px 0;background:#fff}.loading-title,.loading-score,.loading-row span{background:linear-gradient(90deg,#f1f2f4 25%,#fafafa 50%,#f1f2f4 75%);background-size:200% 100%;animation:shimmer 1.2s infinite;border-radius:10px}.loading-title{height:18px;width:180px}.loading-score{height:58px;width:240px;margin-top:20px}.loading-row{display:flex;gap:12px;margin-top:24px}.loading-row span{display:block;height:70px;flex:1}.loading-text{font-size:13px;color:#8b8f98;margin-top:16px}
@@ -33,14 +33,14 @@ div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:
 .risk-title{display:flex;align-items:center;gap:5px;font-size:15px;font-weight:750;color:#20232b;margin-bottom:13px}
 .risk-score{font-size:27px;font-weight:850;line-height:1.05;letter-spacing:-.035em;color:#252831}
 .risk-score span{font-size:13px;font-weight:650;color:#6b7280;letter-spacing:0}
-.info-icon{appearance:none;-webkit-appearance:none;border:0;background:transparent;padding:0;margin:0;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;font-size:11px;line-height:1;font-weight:800;color:#7b818b;cursor:help;position:relative;outline:none}
+.info-icon{appearance:none;-webkit-appearance:none;border:1.4px solid #7b818b;background:transparent;padding:0;margin:0;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;font-size:10px;line-height:1;font-weight:800;color:#626975;cursor:help;position:relative;outline:none;box-sizing:border-box}
 .info-icon::before{content:'i';font-family:Arial,sans-serif}
-.info-icon:hover,.info-icon:focus,.info-icon:focus-visible{background:#eef0f3;color:#32363f}
+.info-icon:hover,.info-icon:focus,.info-icon:focus-visible{background:#eef0f3;color:#32363f;border-color:#32363f}
 .info-tip{visibility:hidden;opacity:0;pointer-events:none;position:absolute;z-index:999;left:50%;top:23px;transform:translateX(-50%) translateY(-2px);width:min(310px,76vw);padding:11px 12px;border:1px solid #dfe2e7;border-radius:12px;background:#fff;box-shadow:0 10px 30px rgba(0,0,0,.12);font-size:12.5px;font-weight:500;line-height:1.55;color:#3d424b;text-align:left;transition:opacity .12s ease,transform .12s ease}
 .info-icon:hover .info-tip,.info-icon:focus .info-tip,.info-icon:focus-visible .info-tip{visibility:visible;opacity:1;transform:translateX(-50%) translateY(0)}
 .market-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:10px}
 .market-card{border:1px solid #e5e7eb;border-radius:17px;padding:14px 15px;background:rgba(255,255,255,.78);min-height:94px}
-.market-name{font-size:13px;font-weight:700;color:#555b65;margin-bottom:9px}
+.market-name{display:flex;align-items:center;gap:5px;font-size:13px;font-weight:700;color:#555b65;margin-bottom:9px}
 .market-value{font-size:22px;font-weight:820;letter-spacing:-.025em;color:#242832;line-height:1.1}
 .market-delta{font-size:12px;margin-top:7px;color:#6b7280;white-space:nowrap}
 @media(max-width:768px){
@@ -478,12 +478,10 @@ st.markdown('<div class="dev-credit">Developed by 유유상</div>', unsafe_allow
 st.caption("시장·금리·신용·경기·물가를 현재 공개 데이터 기준으로 자동 분석")
 refresh_indicator(); _,delta_text,delta_class=delta_value(overall,prev_overall)
 
-st.markdown(f"""<div class="hero"><div class="small">위험지수</div><div class="score-row">
-<div class="hero-score">{overall:.1f}<span class="score-unit"> /100</span></div><div class="risk-guide">100에 가까울수록 위험</div>
+st.markdown(f"""<div class="hero"><div class="hero-title">위험지수</div><div class="score-row">
+<div class="hero-score">{overall:.1f}<span class="score-unit"> /100</span></div>
 </div><div class="hero-state"><span class="risk-dot {risk_class(overall)}"></span>{label(overall)}</div></div>""",unsafe_allow_html=True)
-cc1,cc2=st.columns([1,2])
-with cc1: st.markdown(f"**전일 비교** <span class='delta-{delta_class}'>{delta_text}</span>",unsafe_allow_html=True)
-with cc2: st.markdown("<span class='delta-up'>▲ 위험 증가</span> · <span class='delta-down'>▼ 위험 감소</span>",unsafe_allow_html=True)
+st.markdown(f"**전일 비교** <span class='delta-{delta_class}'>{delta_text}</span>",unsafe_allow_html=True)
 
 comments=[]
 if pd.notna(dev):
@@ -518,6 +516,7 @@ st.caption("ⓘ 데스크톱에서는 마우스를 올리고, 모바일에서는
 
 st.markdown('<div class="section"><h3>핵심 시장 상태</h3></div>',unsafe_allow_html=True)
 fx=_read_fx().get("items",{})
+
 def _fmt_fx(name,decimals=2):
     item=fx.get(name,{})
     v=item.get("value",np.nan); p=item.get("prev",np.nan)
@@ -533,23 +532,70 @@ def _fmt_fx(name,decimals=2):
             delta=f"— 0.{('0'*decimals)} (0.00%)"
     return f"{v:,.{decimals}f}",delta,cls
 
-def _sign_class(x):
-    if pd.isna(x) or abs(float(x))<1e-12: return "flat"
-    return "up" if float(x)>0 else "down"
+def _series_delta(s,unit="%",decimals=2):
+    cur=latest(s); prevv=second(s)
+    if pd.isna(cur): return "N/A","", "flat"
+    value=f"{cur:,.{decimals}f}{unit}"
+    if pd.isna(prevv): return value,"직전값 비교 불가","flat"
+    ch=float(cur-prevv)
+    if ch>0: return value,f"▲ {abs(ch):.{decimals}f}{unit}","up"
+    if ch<0: return value,f"▼ {abs(ch):.{decimals}f}{unit}","down"
+    return value,f"— {0:.{decimals}f}{unit}","flat"
 
-market_items=[
-    ("S&P 500",f"{latest(sp):,.2f}",f"{'▲' if dev>0 else '▼' if dev<0 else '—'} {abs(dev):.1f}% vs 200일선" if pd.notna(dev) else "",_sign_class(dev)),
-    ("VIX",f"{latest(vix):.2f}",label(scores["변동성"]),"flat"),
-    ("10년물 국채수익률",f"{latest(y10):.2f}%",f"10Y-EFFR {latest(spread10fed):+.2f}%p","flat"),
-    ("하이일드 스프레드",f"{latest(hy):.2f}%p",label(scores["신용"]),"flat"),
-]
-for _name in ("원/달러","엔/달러","달러인덱스"):
-    _v,_d,_cls=_fmt_fx(_name,2); market_items.append((_name,_v,_d,_cls))
+def _cpi_yoy_display(s):
+    yoy=s.pct_change(12)*100
+    cur=latest(yoy); prevv=second(yoy)
+    if pd.isna(cur): return "N/A","", "flat"
+    value=f"{cur:.2f}%"
+    if pd.isna(prevv): return value,"직전 발표 비교 불가","flat"
+    ch=float(cur-prevv)
+    if ch>0:return value,f"▲ {abs(ch):.2f}%p","up"
+    if ch<0:return value,f"▼ {abs(ch):.2f}%p","down"
+    return value,"— 0.00%p","flat"
+
+market_info={
+    "미국 기준금리":"미국의 실효 연방기금금리(EFFR)입니다. 연준의 통화정책과 단기 금융환경을 보여주는 대표 금리입니다.",
+    "미국 2년물 국채수익률":"미국 2년 만기 국채의 시장 수익률입니다. 향후 기준금리 기대에 민감하게 반응합니다.",
+    "미국 10년물 국채수익률":"미국 10년 만기 국채의 시장 수익률입니다. 장기금리와 금융환경을 판단하는 대표 지표입니다.",
+    "미국 30년물 국채수익률":"미국 30년 만기 국채의 시장 수익률입니다. 장기 성장·물가 기대와 장기 자금조달 여건을 반영합니다.",
+    "실업률":"미국 노동시장에서 실업자가 차지하는 비율입니다. 경기 둔화와 고용시장 변화를 판단하는 핵심 지표입니다.",
+    "원/달러 환율":"미국 달러 1달러당 원화 가격입니다. 원화 가치와 달러 강세 정도를 참고하기 위한 지표입니다.",
+    "엔/달러 환율":"미국 달러 1달러당 일본 엔화 가격입니다. 엔화 가치와 글로벌 달러 흐름을 참고하는 지표입니다.",
+    "달러인덱스":"주요 통화 대비 미국 달러의 상대적 강도를 나타내는 달러인덱스(DXY)입니다.",
+    "하이일드 스프레드":"미국 투기등급 회사채가 국채보다 추가로 요구하는 금리입니다. 커질수록 신용시장 스트레스가 높다는 의미입니다.",
+    "CPI":"미국 소비자물가지수의 전년 대비 상승률입니다. 소비자가 체감하는 전반적인 물가 압력을 보여줍니다."
+}
+
+market_items=[]
+for name,series,unit,dec in [
+    ("미국 기준금리",fed,"%",2),
+    ("미국 2년물 국채수익률",y2,"%",2),
+    ("미국 10년물 국채수익률",y10,"%",2),
+    ("미국 30년물 국채수익률",y30,"%",2),
+    ("실업률",unemp,"%",1),
+]:
+    v,dlt,cls=_series_delta(series,unit,dec)
+    market_items.append((name,v,dlt,cls))
+
+for name in ("원/달러","엔/달러","달러인덱스"):
+    v,dlt,cls=_fmt_fx(name,2)
+    market_items.append((name,v,dlt,cls))
+
+v,dlt,cls=_series_delta(hy,"%p",2)
+market_items.append(("하이일드 스프레드",v,dlt,cls))
+v,dlt,cls=_cpi_yoy_display(cpi)
+market_items.append(("CPI",v,dlt,cls))
+
 market_cards=[]
 for n,v,dlt,cls in market_items:
-    market_cards.append(f'<div class="market-card"><div class="market-name">{n}</div><div class="market-value">{v}</div><div class="market-delta delta-{cls}">{dlt}</div></div>')
+    tip=market_info[n].replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+    market_cards.append(
+        f'<div class="market-card"><div class="market-name">{n}'
+        f'<button class="info-icon" aria-label="{n} 설명" type="button"><span class="info-tip">{tip}</span></button>'
+        f'</div><div class="market-value">{v}</div><div class="market-delta delta-{cls}">{dlt}</div></div>'
+    )
 st.markdown('<div class="market-grid">'+''.join(market_cards)+'</div>',unsafe_allow_html=True)
-st.caption("환율·달러인덱스는 전일 대비 변화와 함께 표시하는 참고자료이며 위험지수 산식에는 포함하지 않습니다. 무료·API키 없는 시장 데이터를 백그라운드에서 갱신합니다.")
+st.caption("ⓘ 데스크톱에서는 마우스를 올리고, 모바일에서는 터치하면 지표 설명을 볼 수 있습니다. 환율·달러인덱스는 참고자료이며 위험지수 산식에는 포함하지 않습니다.")
 
 @st.cache_data(ttl=3600,show_spinner=False)
 def historical_risk_fast(data):
@@ -595,4 +641,4 @@ with st.expander("세부 데이터 및 계산 기준"):
     st.write("현재 2·10·30년물은 가능한 경우 미 재무부 공식 일일 수익률곡선의 더 최신 값을 우선 반영하며 기준금리는 일간 EFFR을 사용합니다.")
     st.write("환율: 원/달러, 엔/달러, 달러인덱스는 참고표시 전용이며 종합위험지수에는 포함하지 않습니다.")
 
-st.caption(f"Risk Monitor 3.29.0 Responsive Web Test · 화면 갱신 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} · 캐시 즉시 표시 · 백그라운드 최신화")
+st.caption(f"Risk Monitor 3.30.0 Responsive Web Test · 화면 갱신 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} · 캐시 즉시 표시 · 백그라운드 최신화")
