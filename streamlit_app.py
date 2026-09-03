@@ -25,7 +25,7 @@ html,body,[class*="css"],.stApp,.stMarkdown,.stCaption,button,input,textarea,sel
 .risk-state{display:flex;align-items:center;gap:6px;font-size:13px;color:#6b7280;margin-top:7px}.risk-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:0 0 8px}.risk-dot.vlow{background:#22a06b}.risk-dot.low{background:#78b84a}.risk-dot.mid{background:#e5b82e}.risk-dot.high{background:#ef8b2c}.risk-dot.vhigh{background:#e5484d}.risk-dot.na{background:#a1a1aa}
 .hero-state{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:750;margin-top:8px;color:#20232b}.hero-state .risk-dot{width:10px;height:10px;flex-basis:10px}
 .recession-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:8px}.recession-card{border:1px solid #e5e7eb;border-radius:16px;padding:11px 13px;background:rgba(255,255,255,.78);min-height:72px}.recession-name{font-size:12px;font-weight:700;color:#656b74;margin-bottom:6px}.recession-value{font-size:19px;font-weight:800;color:#282c34;line-height:1.15}
-.signal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:10px 0 4px}.signal-card{border:1px solid #e5e7eb;border-radius:17px;padding:13px 14px;background:rgba(255,255,255,.78);min-height:80px}.signal-name{font-size:12px;font-weight:750;color:#656b74;margin-bottom:6px}.signal-value{font-size:18px;font-weight:820;color:#282c34;line-height:1.2}.signal-detail{font-size:11.5px;color:#737983;margin-top:5px;line-height:1.45}
+.signal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0 5px}.signal-card{border:1px solid #e5e7eb;border-radius:18px;padding:15px 16px;background:rgba(255,255,255,.78);min-height:96px}.signal-name{font-size:12px;font-weight:760;color:#737983;margin-bottom:9px;letter-spacing:-.01em}.signal-status{display:flex;align-items:center;gap:8px;min-height:25px}.signal-status-dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex:0 0 10px}.signal-status-dot.normal{background:#22a06b}.signal-status-dot.watch{background:#e5b82e}.signal-status-dot.caution{background:#ef8b2c}.signal-status-dot.alert{background:#e5484d}.signal-value{font-size:21px;font-weight:850;color:#282c34;line-height:1.15;letter-spacing:-.025em}.signal-count{display:inline-flex;align-items:center;min-height:20px;padding:2px 7px;border-radius:999px;background:#f2f3f5;color:#656b74;font-size:10.5px;font-weight:750;white-space:nowrap}.signal-detail{font-size:11.5px;color:#737983;margin-top:8px;line-height:1.45;white-space:normal}
 .small{font-size:13px;color:#6b7280}.hero-title{font-size:15px;font-weight:800;color:#555b65}.section{margin-top:30px;margin-bottom:10px}
 div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:14px}
 .data-status{font-size:12px;color:#6b7280;display:flex;align-items:center;gap:7px;margin:-2px 0 8px}.data-status span{width:7px;height:7px;border-radius:50%;background:#a1a1aa;animation:pulse 1.1s ease-in-out infinite}.data-status.done span{background:#22a06b;animation:none}
@@ -66,7 +66,7 @@ div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:
   .market-card{min-height:84px;padding:12px 12px}.market-name{font-size:12px;margin-bottom:7px}.market-value{font-size:19px}.market-delta{font-size:11px;white-space:normal}
   div[data-testid="stMetric"]{padding:12px}
   .recession-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.recession-card{min-height:64px;padding:9px 8px;border-radius:14px}.recession-name{font-size:10.5px;margin-bottom:5px}.recession-value{font-size:16px}
-  .signal-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.signal-card{min-height:76px;padding:11px 10px;border-radius:14px}.signal-name{font-size:10.5px}.signal-value{font-size:15.5px}.signal-detail{font-size:10.5px}
+  .signal-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}.signal-card{min-height:92px;padding:13px 11px;border-radius:15px}.signal-name{font-size:10.5px;margin-bottom:8px}.signal-status{gap:6px;min-height:22px}.signal-status-dot{width:9px;height:9px;flex-basis:9px}.signal-value{font-size:18px}.signal-count{font-size:9.5px;min-height:18px;padding:1px 6px}.signal-detail{font-size:10.5px;margin-top:7px;line-height:1.4}
 }
 </style>""", unsafe_allow_html=True)
 
@@ -684,14 +684,22 @@ st.markdown(f"""<div class="hero"><div class="hero-title">위험지수</div><div
 </div><div class="hero-state"><span class="risk-dot {risk_class(overall)}"></span>{label(overall)}</div></div>""",unsafe_allow_html=True)
 st.markdown(f"**전일 비교** <span class='delta-{delta_class}'>{delta_text}</span>",unsafe_allow_html=True)
 
-_structure_detail=", ".join(x[0] for x in structure.get("items",[])) if structure.get("items") else "뚜렷한 구조적 경보 없음"
-_structure_value=structure.get("level","정상") if not structure.get("count") else f"{structure.get('level')} · {structure.get('count')}개"
+_structure_detail=", ".join(x[0] for x in structure.get("items",[])) if structure.get("items") else "뚜렷한 구조적 위험 신호 없음"
+_structure_raw=structure.get("level","정상")
+_structure_state={"정상":("정상","normal"),"관찰":("관찰","watch"),"주의":("주의","caution"),"경계":("경고","alert")}.get(_structure_raw,(str(_structure_raw),"watch"))
+_structure_count=int(structure.get("count",0) or 0)
+_structure_count_html=f'<span class="signal-count">{_structure_count}개</span>' if _structure_count else ""
 _rapid_detail=", ".join(rapid.get("active",[])) if rapid.get("active") else "동시 급변 신호 없음"
-_rapid_value=rapid.get("level","정상")
+_rapid_raw=rapid.get("level","정상")
+_rapid_state={"정상":("정상","normal"),"관찰":("관찰","watch"),"급변 경보":("주의","caution"),"강한 스트레스":("경고","alert")}.get(_rapid_raw,(str(_rapid_raw),"watch"))
+_rapid_count=int(rapid.get("count",0) or 0)
+_rapid_count_html=f'<span class="signal-count">{_rapid_count}개</span>' if _rapid_count else ""
+_structure_detail_html=html.escape(_structure_detail)
+_rapid_detail_html=html.escape(_rapid_detail)
 st.markdown(
     f'<div class="signal-grid">'
-    f'<div class="signal-card"><div class="signal-name">구조적 경보</div><div class="signal-value">{_structure_value}</div><div class="signal-detail">{_structure_detail}</div></div>'
-    f'<div class="signal-card"><div class="signal-name">급변 경보</div><div class="signal-value">{_rapid_value}</div><div class="signal-detail">{_rapid_detail}</div></div>'
+    f'<div class="signal-card"><div class="signal-name">구조적 위험 신호</div><div class="signal-status"><span class="signal-status-dot {_structure_state[1]}"></span><span class="signal-value">{_structure_state[0]}</span>{_structure_count_html}</div><div class="signal-detail">{_structure_detail_html}</div></div>'
+    f'<div class="signal-card"><div class="signal-name">시장 급변 신호</div><div class="signal-status"><span class="signal-status-dot {_rapid_state[1]}"></span><span class="signal-value">{_rapid_state[0]}</span>{_rapid_count_html}</div><div class="signal-detail">{_rapid_detail_html}</div></div>'
     f'</div>',unsafe_allow_html=True)
 
 comments=[]
@@ -878,9 +886,9 @@ with st.expander("세부 데이터 및 계산 기준"):
     st.write("신용: HY OAS 45% + BBB OAS 20% + 최근 5거래일 확대 15% + 최근 20거래일 확대 20%.")
     st.write("경기: 실업률 30% + Sahm Rule 35% + 신규 실업수당 35%. Sahm 단독 신호는 신규 실업수당의 최근 8주 상승 추세가 확인되지 않으면 강도를 제한합니다.")
     st.write("물가: CPI 25% + 근원 CPI 35% + 근원 PCE 40%. 각 지표에서 전년동월비와 최근 3개월 연율화를 함께 반영합니다.")
-    st.write("구조적 경보와 급변 경보는 종합위험점수에 단순 가산하지 않고 별도 레이어로 표시합니다.")
+    st.write("구조적 위험 신호와 시장 급변 신호는 종합위험점수에 단순 가산하지 않고 별도 레이어로 표시합니다.")
     st.write("CAPE는 Shiller PE 월별 공개 표를 보조 데이터로 사용하며, 수집 실패 시 해당 세부 비중은 자동으로 제외·재정규화합니다.")
     st.write("현재 2·10·30년물은 가능한 경우 미 재무부 공식 일일 수익률곡선의 더 최신 값을 우선 반영하며 기준금리는 일간 EFFR을 사용합니다.")
     st.write("환율: 원/달러, 엔/달러, 달러인덱스는 참고표시 전용이며 종합위험지수에는 포함하지 않습니다.")
 
-st.caption(f"Risk Monitor 3.32.0 Multi-Layer Risk Engine · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime('%Y-%m-%d %H:%M:%S KST')} · 캐시 즉시 표시 · 백그라운드 최신화")
+st.caption(f"Risk Monitor 3.33.0 Signal Readability · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime('%Y-%m-%d %H:%M:%S KST')} · 캐시 즉시 표시 · 백그라운드 최신화")
