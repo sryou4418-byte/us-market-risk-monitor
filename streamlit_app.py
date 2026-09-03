@@ -2,7 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
-import requests, csv, os, threading, shutil, json, time
+import requests, csv, os, threading, shutil, json, time, re, html
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -25,6 +25,7 @@ html,body,[class*="css"],.stApp,.stMarkdown,.stCaption,button,input,textarea,sel
 .risk-state{display:flex;align-items:center;gap:6px;font-size:13px;color:#6b7280;margin-top:7px}.risk-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:0 0 8px}.risk-dot.vlow{background:#22a06b}.risk-dot.low{background:#78b84a}.risk-dot.mid{background:#e5b82e}.risk-dot.high{background:#ef8b2c}.risk-dot.vhigh{background:#e5484d}.risk-dot.na{background:#a1a1aa}
 .hero-state{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:750;margin-top:8px;color:#20232b}.hero-state .risk-dot{width:10px;height:10px;flex-basis:10px}
 .recession-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:8px}.recession-card{border:1px solid #e5e7eb;border-radius:16px;padding:11px 13px;background:rgba(255,255,255,.78);min-height:72px}.recession-name{font-size:12px;font-weight:700;color:#656b74;margin-bottom:6px}.recession-value{font-size:19px;font-weight:800;color:#282c34;line-height:1.15}
+.signal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:10px 0 4px}.signal-card{border:1px solid #e5e7eb;border-radius:17px;padding:13px 14px;background:rgba(255,255,255,.78);min-height:80px}.signal-name{font-size:12px;font-weight:750;color:#656b74;margin-bottom:6px}.signal-value{font-size:18px;font-weight:820;color:#282c34;line-height:1.2}.signal-detail{font-size:11.5px;color:#737983;margin-top:5px;line-height:1.45}
 .small{font-size:13px;color:#6b7280}.hero-title{font-size:15px;font-weight:800;color:#555b65}.section{margin-top:30px;margin-bottom:10px}
 div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:14px}
 .data-status{font-size:12px;color:#6b7280;display:flex;align-items:center;gap:7px;margin:-2px 0 8px}.data-status span{width:7px;height:7px;border-radius:50%;background:#a1a1aa;animation:pulse 1.1s ease-in-out infinite}.data-status.done span{background:#22a06b;animation:none}
@@ -65,6 +66,7 @@ div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:
   .market-card{min-height:84px;padding:12px 12px}.market-name{font-size:12px;margin-bottom:7px}.market-value{font-size:19px}.market-delta{font-size:11px;white-space:normal}
   div[data-testid="stMetric"]{padding:12px}
   .recession-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.recession-card{min-height:64px;padding:9px 8px;border-radius:14px}.recession-name{font-size:10.5px;margin-bottom:5px}.recession-value{font-size:16px}
+  .signal-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.signal-card{min-height:76px;padding:11px 10px;border-radius:14px}.signal-name{font-size:10.5px}.signal-value{font-size:15.5px}.signal-detail{font-size:10.5px}
 }
 </style>""", unsafe_allow_html=True)
 
@@ -72,11 +74,12 @@ FRED_CSV="https://fred.stlouisfed.org/graph/fredgraph.csv?id={}"
 FRED_RECENT="https://fred.stlouisfed.org/graph/fredgraph.csv?id={}&cosd={}"
 SERIES={
     "기준금리":"EFFR","2년물":"DGS2","10년물":"DGS10","30년물":"DGS30",
+    "10년물기간프리미엄":"THREEFYTP10",
     "하이일드스프레드":"BAMLH0A0HYM2","BBB스프레드":"BAMLC0A4CBBB",
     "CPI":"CPIAUCSL","근원CPI":"CPILFESL","근원PCE":"PCEPILFE",
     "실업률":"UNRATE","신규실업수당":"ICSA","S&P500":"SP500","VIX":"VIXCLS"
 }
-WEIGHTS={"시장추세":.25,"변동성":.15,"금리":.20,"신용":.15,"경기":.20,"물가":.05}
+WEIGHTS={"시장·밸류에이션":.25,"변동성":.10,"금리":.25,"신용":.15,"경기":.17,"물가":.08}
 
 ROOT_CACHE=_Path(os.environ.get("LOCALAPPDATA", str(_Path.home()))) / "RiskMonitor"
 CACHE_DIR=ROOT_CACHE / "data"
@@ -84,6 +87,8 @@ CACHE_DIR.mkdir(parents=True,exist_ok=True)
 RECENT_DAYS=90
 REFRESH_STATUS=ROOT_CACHE / "refresh_status.json"
 FX_CACHE=ROOT_CACHE / "fx_snapshot.json"
+CAPE_CACHE=ROOT_CACHE / "cape.csv"
+CAPE_URL="https://www.multpl.com/shiller-pe/table/by-month"
 
 
 def _migrate_legacy_cache():
@@ -242,6 +247,33 @@ def _read_fx():
     except Exception: return {"items":{}}
 
 
+def _read_cape():
+    if not CAPE_CACHE.exists(): return pd.Series(dtype=float)
+    try:
+        df=pd.read_csv(CAPE_CACHE,parse_dates=["date"])
+        if "cape" not in df: return pd.Series(dtype=float)
+        out=pd.Series(pd.to_numeric(df["cape"],errors="coerce").values,index=pd.DatetimeIndex(df["date"])).dropna()
+        return out[~out.index.duplicated(keep="last")].sort_index()
+    except Exception: return pd.Series(dtype=float)
+
+
+def _refresh_cape():
+    headers={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"}
+    r=requests.get(CAPE_URL,headers=headers,timeout=(3,7)); r.raise_for_status()
+    # Multpl의 월별 표를 외부 HTML 파서 의존성 없이 읽는다.
+    rows=re.findall(r"<tr[^>]*>\s*<td[^>]*>(.*?)</td>\s*<td[^>]*>(.*?)</td>\s*</tr>",r.text,re.I|re.S)
+    rec=[]
+    for d_raw,v_raw in rows:
+        d_txt=re.sub(r"<[^>]+>","",html.unescape(d_raw)).strip()
+        v_txt=re.sub(r"<[^>]+>","",html.unescape(v_raw)).replace("\xa0","").strip()
+        d=pd.to_datetime(d_txt,errors="coerce"); v=pd.to_numeric(v_txt.replace(",",""),errors="coerce")
+        if pd.notna(d) and pd.notna(v): rec.append((d,float(v)))
+    if len(rec)<100: raise ValueError("CAPE 월별 표 파싱 실패")
+    df=pd.DataFrame(rec,columns=["date","cape"]).drop_duplicates("date",keep="last").sort_values("date")
+    tmp=CAPE_CACHE.with_suffix(".tmp"); df.to_csv(tmp,index=False); tmp.replace(CAPE_CACHE)
+    return True
+
+
 def _write_refresh_status(ok,errors):
     ROOT_CACHE.mkdir(parents=True,exist_ok=True)
     payload={"finished":time.time(),"ok":bool(ok),"errors":errors[:10]}
@@ -251,14 +283,17 @@ def _write_refresh_status(ok,errors):
 def _refresh_all_background():
     errors=[]
     priority=[("기준금리","EFFR"),("2년물","DGS2"),("10년물","DGS10"),("30년물","DGS30")]
-    with ThreadPoolExecutor(max_workers=5) as ex:
+    with ThreadPoolExecutor(max_workers=6) as ex:
         fs=[ex.submit(_refresh_series,*x) for x in priority]
         fx_future=ex.submit(_refresh_fx)
+        cape_future=ex.submit(_refresh_cape)
         for f in fs:
             _,_,err=f.result()
             if err: errors.append(err)
         try: errors.extend(fx_future.result())
         except Exception as e: errors.append(f"환율: {e}")
+        try: cape_future.result()
+        except Exception as e: errors.append(f"CAPE: {e}")
     try:
         d,vals=_treasury_latest()
         for sid,v in vals.items(): _merge_and_write(sid,pd.Series([v],index=pd.DatetimeIndex([d]),dtype=float))
@@ -329,7 +364,8 @@ def percentile_score(series,value,high_is_risk=True,lookback_years=20):
     s=series.dropna().copy()
     if len(s)<30 or pd.isna(value): return np.nan
     idx=pd.to_datetime(s.index,errors="coerce"); s=s[~idx.isna()].copy(); s.index=idx[~idx.isna()]
-    cutoff=pd.Timestamp.now().normalize()-pd.DateOffset(years=lookback_years); s=s.loc[s.index>=cutoff]
+    if not len(s): return np.nan
+    cutoff=s.index.max()-pd.DateOffset(years=lookback_years); s=s.loc[s.index>=cutoff]
     if len(s)<30:return np.nan
     p=float((s<=float(value)).mean()*100); return clamp(p if high_is_risk else 100-p)
 
@@ -351,70 +387,241 @@ def weighted_custom(scores,weights):
 
 
 def market_overheat_from_dev(dev):
-    # 시장 붕괴가 아니라 '과열'을 측정한다. 200일선 아래에서는 과열 위험이 낮아지고,
-    # +5% 이후부터 점진적으로, +10% 이후에는 더 빠르게 상승한다.
+    # 가격이 붕괴한 뒤의 스트레스가 아니라, 폭락 전 가격 과열 취약성을 측정한다.
     return interp_score(dev,[-15,-5,0,5,10,15,20],[0,5,15,40,70,90,100])
 
 
-def market_overheat_score(sp):
-    if len(sp)<220:return np.nan,np.nan
-    ma=sp.rolling(200).mean(); dev=(latest(sp)/latest(ma)-1)*100
-    return market_overheat_from_dev(dev),dev
+def cape_score(cape_value):
+    return interp_score(cape_value,[10,15,20,25,30,35,40,45],[5,10,25,45,65,80,92,100])
 
 
-def vix_surge_score(vix):
+def market_momentum_score(sp,dev):
+    z=sp.dropna()
+    if len(z)<21 or z.iloc[-21]<=0:return np.nan
+    ret20=(z.iloc[-1]/z.iloc[-21]-1)*100
+    raw=interp_score(ret20,[-12,-6,0,3,6,10,15],[0,5,10,30,55,80,100])
+    # 폭락 뒤의 기술적 반등을 과열로 오인하지 않도록 200일선 위치에 따라 모멘텀 영향 제한.
+    if pd.isna(dev): gate=.5
+    elif dev<=0: gate=.25
+    elif dev<5: gate=.25+.35*(dev/5)
+    elif dev<10: gate=.60+.30*((dev-5)/5)
+    else: gate=1.0
+    return clamp(raw*gate),ret20
+
+
+def market_risk_score(sp,cape):
+    if len(sp.dropna())<220:return np.nan,{"dev":np.nan,"cape":np.nan,"mom20":np.nan}
+    z=sp.dropna(); ma=z.rolling(200).mean(); dev=(latest(z)/latest(ma)-1)*100
+    over=market_overheat_from_dev(dev)
+    cv=latest(cape) if len(cape.dropna()) else np.nan
+    val=cape_score(cv) if pd.notna(cv) else np.nan
+    mom,mom20=market_momentum_score(z,dev)
+    score=weighted_custom({"over":over,"value":val,"momentum":mom},{"over":.45,"value":.35,"momentum":.20})
+    return score,{"dev":dev,"cape":cv,"over":over,"valuation":val,"momentum":mom,"mom20":mom20}
+
+
+def vix_surge_detail(vix):
     z=vix.dropna()
-    if len(z)<6 or z.iloc[-6]<=0:return np.nan
-    chg=(z.iloc[-1]/z.iloc[-6]-1)*100
-    return interp_score(chg,[-20,0,10,25,50,80],[0,5,25,55,85,100])
+    if len(z)<6 or z.iloc[-6]<=0:return {"score":np.nan,"pct":np.nan,"points":np.nan}
+    pct=(z.iloc[-1]/z.iloc[-6]-1)*100; pts=float(z.iloc[-1]-z.iloc[-6])
+    pct_s=interp_score(pct,[-25,0,10,25,50,80,150],[0,5,20,45,70,90,100])
+    pts_s=interp_score(pts,[-8,0,2,5,10,20,40],[0,5,20,45,70,90,100])
+    return {"score":weighted_custom({"pct":pct_s,"pts":pts_s},{"pct":.60,"pts":.40}),"pct":pct,"points":pts}
 
 
 def volatility_score(vix):
-    return weighted_custom({"level":percentile_score(vix,latest(vix),True),"surge":vix_surge_score(vix)},{"level":.75,"surge":.25})
+    level=interp_score(latest(vix),[10,12,15,20,25,30,40,60],[5,10,20,40,60,75,90,100])
+    surge=vix_surge_detail(vix)
+    return weighted_custom({"level":level,"surge":surge["score"]},{"level":.55,"surge":.45}),{"level":level,**surge}
 
 
 def sahm_series(u):
     m=u.resample("MS").mean(); ma3=m.rolling(3).mean(); low=ma3.rolling(12,min_periods=12).min(); return (ma3-low).dropna()
 
+
 def sahm_score(u):
-    s=sahm_series(u); return clamp(latest(s)*100) if len(s) else np.nan
+    s=sahm_series(u); v=latest(s) if len(s) else np.nan
+    return interp_score(v,[0,.1,.2,.35,.5,.75,1.5],[5,15,30,50,70,90,100]),v
+
+
+def rate_rise_score(y10,obs=20):
+    z=y10.dropna()
+    if len(z)<=obs:return np.nan,np.nan
+    delta=float(z.iloc[-1]-z.iloc[-1-obs])
+    return interp_score(delta,[-1,-.5,0,.15,.35,.60,1.0,1.5],[0,5,10,25,50,75,90,100]),delta
+
+
+def rate_score(y2,y10,fed,term_premium):
+    curve=(y10-y2).dropna(); policy=(y10-fed).dropna()
+    curve_v=latest(curve); policy_v=latest(policy); tp=latest(term_premium) if len(term_premium.dropna()) else np.nan
+    level=interp_score(latest(y10),[0,1.5,2.5,3.5,4.25,5,6,8],[5,10,20,35,55,75,90,100])
+    rise,rise_delta=rate_rise_score(y10,20)
+    # 음의 스프레드는 단기금리가 장기금리보다 높은 긴축/역전 상태로 평가.
+    curve_s=interp_score(curve_v,[-2,-1,-.5,0,.5,1,2],[100,90,75,60,35,20,5])
+    policy_s=interp_score(policy_v,[-3,-2,-1,0,1,2],[100,90,70,45,20,5])
+    tp_s=interp_score(tp,[-1,-.5,0,.5,1,1.5,2.5],[5,10,20,45,65,80,100]) if pd.notna(tp) else np.nan
+    score=weighted_custom({"level":level,"rise":rise,"curve":curve_s,"policy":policy_s,"tp":tp_s},
+                          {"level":.35,"rise":.25,"curve":.15,"policy":.15,"tp":.10})
+    return score,{"level":level,"rise":rise,"rise_delta":rise_delta,"curve":curve_s,"curve_value":curve_v,
+                  "policy":policy_s,"policy_value":policy_v,"tp":tp_s,"tp_value":tp}
 
 
 def spread_change_score(s,obs=20):
     z=s.dropna()
     if len(z)<=obs:return np.nan
     delta=float(z.iloc[-1]-z.iloc[-1-obs])
-    return interp_score(delta,[-1,0,.25,.5,1,2],[0,5,25,45,70,100])
+    if obs<=5:
+        return interp_score(delta,[-.5,0,.15,.30,.60,1.20,2.0],[0,5,25,45,70,90,100])
+    return interp_score(delta,[-1,0,.25,.50,1.0,2.0,4.0],[0,5,25,45,70,90,100])
 
 
 def credit_score(hy,bbb):
-    # FRED의 ICE OAS 장기 히스토리가 3년으로 제한되어 단순 백분위 대신 절대 스트레스 구간을 중심으로 평가.
     hy_abs=interp_score(latest(hy),[1.5,2.5,3.5,5,7,10,15],[5,12,25,50,70,90,100])
     bbb_abs=interp_score(latest(bbb),[.4,.8,1.0,1.5,2.5,4,6],[5,12,20,40,65,85,100]) if len(bbb.dropna()) else np.nan
-    widening=weighted_custom({"hy":spread_change_score(hy),"bbb":spread_change_score(bbb)},{"hy":.7,"bbb":.3})
-    return weighted_custom({"hy":hy_abs,"bbb":bbb_abs,"widening":widening},{"hy":.55,"bbb":.25,"widening":.20})
+    hy5,bbb5=spread_change_score(hy,5),spread_change_score(bbb,5)
+    hy20,bbb20=spread_change_score(hy,20),spread_change_score(bbb,20)
+    fast5=weighted_custom({"hy":hy5,"bbb":bbb5},{"hy":.70,"bbb":.30})
+    trend20=weighted_custom({"hy":hy20,"bbb":bbb20},{"hy":.70,"bbb":.30})
+    score=weighted_custom({"hy":hy_abs,"bbb":bbb_abs,"fast5":fast5,"trend20":trend20},
+                          {"hy":.45,"bbb":.20,"fast5":.15,"trend20":.20})
+    return score,{"hy_abs":hy_abs,"bbb_abs":bbb_abs,"fast5":fast5,"trend20":trend20}
 
 
 def claims_score(icsa):
     z=icsa.dropna()
-    if len(z)<60:return np.nan
+    if len(z)<20:return np.nan,{"level":np.nan,"trend":np.nan,"trend_pct":np.nan}
     ma4=z.rolling(4).mean().dropna()
-    if len(ma4)<53:return np.nan
-    yoy=(ma4.iloc[-1]/ma4.iloc[-53]-1)*100
-    return interp_score(yoy,[-20,0,10,20,40,60],[5,12,30,50,75,100])
+    if len(ma4)<12:return np.nan,{"level":np.nan,"trend":np.nan,"trend_pct":np.nan}
+    # 인구/노동시장 규모 변화 때문에 절대 건수 대신 과거 10년 내 상대 수준을 보되, 미래 데이터는 사용하지 않는다.
+    level=percentile_score(ma4,latest(ma4),True,lookback_years=10)
+    if len(ma4)>=9 and ma4.iloc[-9]>0:
+        pct=(ma4.iloc[-1]/ma4.iloc[-9]-1)*100
+        trend=interp_score(pct,[-20,-5,0,5,10,20,40],[0,5,15,30,50,75,100])
+    else: pct=trend=np.nan
+    return weighted_custom({"level":level,"trend":trend},{"level":.60,"trend":.40}),{"level":level,"trend":trend,"trend_pct":pct}
 
 
 def economy_score(unemp,icsa):
-    return weighted_custom({"unemp":percentile_score(unemp,latest(unemp),True),"sahm":sahm_score(unemp),"claims":claims_score(icsa)},
-                           {"unemp":.40,"sahm":.40,"claims":.20})
+    unemp_level=interp_score(latest(unemp),[3,3.5,4,4.5,5,6,8,10],[10,15,25,40,55,70,90,100])
+    sahm_s,sahm_v=sahm_score(unemp); claims,cd=claims_score(icsa)
+    # Sahm 단독 신호의 오경보를 줄이기 위해 신규 실업수당의 최근 8주 상승 추세가 확인될 때만 강한 신호로 인정한다.
+    claims_confirm=pd.notna(cd.get("trend",np.nan)) and cd.get("trend",0)>=50
+    sahm_adj=sahm_s
+    if pd.notna(sahm_v) and sahm_v>=.5 and not claims_confirm: sahm_adj=min(sahm_s,55)
+    score=weighted_custom({"unemp":unemp_level,"sahm":sahm_adj,"claims":claims},{"unemp":.30,"sahm":.35,"claims":.35})
+    return score,{"unemp":unemp_level,"sahm":sahm_adj,"sahm_raw":sahm_s,"sahm_value":sahm_v,"claims":claims,"claims_confirm":claims_confirm,**{f"claims_{k}":v for k,v in cd.items()}}
+
+
+def _annualized_3m(s):
+    m=s.dropna().resample("MS").last().dropna()
+    if len(m)<4 or m.iloc[-4]<=0:return np.nan
+    return ((m.iloc[-1]/m.iloc[-4])**4-1)*100
+
+
+def inflation_level_score(v):
+    return interp_score(v,[0,1,2,2.5,3,4,6,8,10],[5,10,20,35,50,70,90,98,100])
+
+
+def inflation_momentum_score(v):
+    return interp_score(v,[-2,0,1,2,2.5,3,4,6,8,10],[0,5,10,20,35,50,70,90,98,100])
+
+
+def _inflation_metric(s,yoy_weight,m3_weight):
+    yoy=latest(s.pct_change(12)*100); m3=_annualized_3m(s)
+    ys=inflation_level_score(yoy); ms=inflation_momentum_score(m3)
+    return weighted_custom({"yoy":ys,"m3":ms},{"yoy":yoy_weight,"m3":m3_weight}),{"yoy":yoy,"m3":m3,"yoy_score":ys,"m3_score":ms}
 
 
 def inflation_score(cpi,core_cpi,core_pce):
-    items={"headline":percentile_score(cpi.pct_change(12),latest(cpi.pct_change(12)),True)}
-    if len(core_cpi.dropna()): items["core_cpi"]=percentile_score(core_cpi.pct_change(12),latest(core_cpi.pct_change(12)),True)
-    if len(core_pce.dropna()): items["core_pce"]=percentile_score(core_pce.pct_change(12),latest(core_pce.pct_change(12)),True)
-    return weighted_custom(items,{"headline":.40,"core_cpi":.35,"core_pce":.25})
+    h,hd=_inflation_metric(cpi,.55,.45)
+    c,cd=_inflation_metric(core_cpi,.45,.55) if len(core_cpi.dropna()) else (np.nan,{})
+    p,pd_=_inflation_metric(core_pce,.45,.55) if len(core_pce.dropna()) else (np.nan,{})
+    score=weighted_custom({"headline":h,"core_cpi":c,"core_pce":p},{"headline":.25,"core_cpi":.35,"core_pce":.40})
+    recent=weighted_custom({"headline":hd.get("m3_score",np.nan),"core_cpi":cd.get("m3_score",np.nan),"core_pce":pd_.get("m3_score",np.nan)},
+                           {"headline":.25,"core_cpi":.35,"core_pce":.40})
+    yoy_comp=weighted_custom({"headline":hd.get("yoy_score",np.nan),"core_cpi":cd.get("yoy_score",np.nan),"core_pce":pd_.get("yoy_score",np.nan)},
+                             {"headline":.25,"core_cpi":.35,"core_pce":.40})
+    return score,{"headline":hd,"core_cpi":cd,"core_pce":pd_,"recent":recent,"yoy":yoy_comp}
 
+
+def inversion_memory(spread210,months=18,full_months=6):
+    z=spread210.dropna().sort_index()
+    if not len(z):return 0.0,None
+    inv=z[z<0]
+    if not len(inv):return 0.0,None
+    last_inv=inv.index[-1]; end=z.index[-1]
+    age=max(0.0,(end-last_inv).days/30.44)
+    if age<=full_months:sev=100.0
+    elif age>=months:sev=0.0
+    else:sev=100*(months-age)/(months-full_months)
+    return clamp(sev),last_inv
+
+
+def structural_signals(details,spread210):
+    items=[]; mem,last_inv=inversion_memory(spread210)
+    if mem>=25:
+        items.append(("장단기 금리 역전 이력",mem))
+    val=details.get("market",{}).get("valuation",np.nan)
+    if pd.notna(val) and val>=85: items.append(("시장 고평가",val))
+    recent=details.get("inflation",{}).get("recent",np.nan); yoy=details.get("inflation",{}).get("yoy",np.nan)
+    if pd.notna(recent) and recent>=70 and (pd.isna(yoy) or recent>=yoy): items.append(("물가 재가속",recent))
+    ed=details.get("economy",{})
+    if pd.notna(ed.get("sahm_value",np.nan)) and ed.get("sahm_value",0)>=.5 and ed.get("claims_confirm",False):
+        items.append(("고용 악화 확인",max(ed.get("sahm",0),ed.get("claims_trend",0))))
+    if len(items)>=3:level="경계"
+    elif len(items)>=2:level="주의"
+    elif len(items)==1:level="관찰"
+    else:level="정상"
+    return {"level":level,"count":len(items),"items":items,"inversion_memory":mem,"last_inversion":last_inv}
+
+
+def fast_signal_scores(details):
+    credit_vals=[details.get("credit",{}).get("fast5",np.nan),details.get("credit",{}).get("trend20",np.nan)]
+    credit_vals=[float(v) for v in credit_vals if pd.notna(v)]
+    return {
+        "VIX":details.get("volatility",{}).get("score",np.nan),
+        "신용":max(credit_vals) if credit_vals else np.nan,
+        "10년물":details.get("rates",{}).get("rise",np.nan),
+        "고용":details.get("economy",{}).get("claims_trend",np.nan),
+    }
+
+
+def rapid_alert(current_fast,previous_fast=None):
+    previous_fast=previous_fast or {}
+    flags={k:(pd.notna(v) and v>=70) for k,v in current_fast.items()}
+    prev_flags={k:(pd.notna(previous_fast.get(k,np.nan)) and previous_fast.get(k,np.nan)>=70) for k in current_fast}
+    count=sum(flags.values()); prev_count=sum(prev_flags.values())
+    extreme_vix=pd.notna(current_fast.get("VIX",np.nan)) and current_fast.get("VIX",0)>=85
+    extreme_credit=pd.notna(current_fast.get("신용",np.nan)) and current_fast.get("신용",0)>=80
+    if count>=3 and (prev_count>=2 or sum(pd.notna(v) and v>=85 for v in current_fast.values())>=2):
+        level="강한 스트레스"
+    elif count>=2 and (prev_count>=2 or (extreme_vix and extreme_credit)):
+        level="급변 경보"
+    elif count>=1:
+        level="관찰"
+    else:
+        level="정상"
+    active=[k for k,v in flags.items() if v]
+    return {"level":level,"count":count,"active":active,"scores":current_fast}
+
+
+def _truncate_one(s):
+    z=s.dropna(); return z.iloc[:-1] if len(z)>1 else z
+
+
+def compute_snapshot(data,cape,with_alerts=True):
+    fed,y2,y10=data["기준금리"],data["2년물"],data["10년물"]
+    tp=data.get("10년물기간프리미엄",pd.Series(dtype=float))
+    hy,bbb=data["하이일드스프레드"],data["BBB스프레드"]
+    cpi,core_cpi,core_pce=data["CPI"],data["근원CPI"],data["근원PCE"]
+    unemp,icsa,sp,vix=data["실업률"],data["신규실업수당"],data["S&P500"],data["VIX"]
+    market,md=market_risk_score(sp,cape); vol,vd=volatility_score(vix); rates,rd=rate_score(y2,y10,fed,tp)
+    credit,cd=credit_score(hy,bbb); econ,ed=economy_score(unemp,icsa); infl,id_=inflation_score(cpi,core_cpi,core_pce)
+    scores={"시장·밸류에이션":market,"변동성":vol,"금리":rates,"신용":credit,"경기":econ,"물가":infl}
+    details={"market":md,"volatility":vd,"rates":rd,"credit":cd,"economy":ed,"inflation":id_}
+    overall=weighted(scores)
+    structure=structural_signals(details,(y10-y2).dropna()) if with_alerts else None
+    return {"scores":scores,"details":details,"overall":overall,"structure":structure}
 
 def label(x):
     if pd.isna(x):return "데이터 부족"
@@ -443,41 +650,33 @@ def delta_value(a,b):
 
 
 fed,y2,y10,y30=data["기준금리"],data["2년물"],data["10년물"],data["30년물"]
+term_premium=data.get("10년물기간프리미엄",pd.Series(dtype=float))
 hy,bbb=data["하이일드스프레드"],data["BBB스프레드"]
 cpi,core_cpi,core_pce=data["CPI"],data["근원CPI"],data["근원PCE"]
 unemp,icsa,sp,vix=data["실업률"],data["신규실업수당"],data["S&P500"],data["VIX"]
-spread210=y10-y2; spread10fed=y10-fed
-market,dev=market_overheat_score(sp); sahm=sahm_series(unemp); sahm_now=latest(sahm)
+cape=_read_cape()
+spread210=(y10-y2).dropna(); spread10fed=(y10-fed).dropna()
 
-scores={
- "시장추세":market,
- "변동성":volatility_score(vix),
- "금리":weighted_custom({
-   "curve":percentile_score(spread210,latest(spread210),False),
-   "policy":percentile_score(spread10fed,latest(spread10fed),True),
-   "level":percentile_score(y10,latest(y10),True)}, {"curve":.40,"policy":.35,"level":.25}),
- "신용":credit_score(hy,bbb),
- "경기":economy_score(unemp,icsa),
- "물가":inflation_score(cpi,core_cpi,core_pce)
-}
-overall=weighted(scores)
+snapshot=compute_snapshot(data,cape)
+scores=snapshot["scores"]; details=snapshot["details"]; overall=snapshot["overall"]; structure=snapshot["structure"]
+dev=details["market"].get("dev",np.nan); sahm_now=details["economy"].get("sahm_value",np.nan)
 
-# 비교용 직전 관측값 기반 점수. 발표주기가 다른 지표는 각자 직전 관측값을 사용한다.
-zsp=sp.dropna(); prev_market=market_overheat_score(zsp.iloc[:-1])[0] if len(zsp)>220 else np.nan
-zv=vix.dropna(); prev_vol=volatility_score(zv.iloc[:-1]) if len(zv)>30 else np.nan
-prev_rate=weighted_custom({
-    "curve":percentile_score(spread210,second(spread210),False),
-    "policy":percentile_score(spread10fed,second(spread10fed),True),
-    "level":percentile_score(y10,second(y10),True)}, {"curve":.40,"policy":.35,"level":.25})
-prev_credit=credit_score(hy.dropna().iloc[:-1],bbb.dropna().iloc[:-1]) if len(hy.dropna())>21 else np.nan
-prev_econ=economy_score(unemp.dropna().iloc[:-1],icsa.dropna().iloc[:-1]) if len(unemp.dropna())>15 else np.nan
-prev_infl=inflation_score(cpi.dropna().iloc[:-1],core_cpi.dropna().iloc[:-1],core_pce.dropna().iloc[:-1]) if len(cpi.dropna())>30 else np.nan
-prev={"시장추세":prev_market,"변동성":prev_vol,"금리":prev_rate,"신용":prev_credit,"경기":prev_econ,"물가":prev_infl}
-prev_overall=weighted(prev)
+# 전일 비교는 직전 S&P500 거래일 기준으로 모든 시계열을 그 날짜까지 잘라 재계산한다.
+zsp=sp.dropna(); prev_date=zsp.index[-2] if len(zsp)>=2 else None
+if prev_date is not None:
+    prev_data={k:v.loc[:prev_date].dropna() for k,v in data.items()}
+    prev_cape=cape.loc[:prev_date].dropna() if len(cape) else cape
+    prev_snapshot=compute_snapshot(prev_data,prev_cape,with_alerts=False)
+    prev_overall=prev_snapshot["overall"]
+    prev_fast=fast_signal_scores(prev_snapshot["details"])
+else:
+    prev_snapshot=None; prev_overall=np.nan; prev_fast={}
+current_fast=fast_signal_scores(details)
+rapid=rapid_alert(current_fast,prev_fast)
 
 st.title("미국 증시 종합 위험지수")
 st.markdown('<div class="dev-credit">Developed by 유유상</div>', unsafe_allow_html=True)
-st.caption("시장·금리·신용·경기·물가를 현재 공개 데이터 기준으로 자동 분석")
+st.caption("시장·밸류에이션·금리·신용·경기·물가를 현재 공개 데이터 기준으로 자동 분석")
 refresh_indicator(); _,delta_text,delta_class=delta_value(overall,prev_overall)
 
 st.markdown(f"""<div class="hero"><div class="hero-title">위험지수</div><div class="score-row">
@@ -485,28 +684,38 @@ st.markdown(f"""<div class="hero"><div class="hero-title">위험지수</div><div
 </div><div class="hero-state"><span class="risk-dot {risk_class(overall)}"></span>{label(overall)}</div></div>""",unsafe_allow_html=True)
 st.markdown(f"**전일 비교** <span class='delta-{delta_class}'>{delta_text}</span>",unsafe_allow_html=True)
 
+_structure_detail=", ".join(x[0] for x in structure.get("items",[])) if structure.get("items") else "뚜렷한 구조적 경보 없음"
+_structure_value=structure.get("level","정상") if not structure.get("count") else f"{structure.get('level')} · {structure.get('count')}개"
+_rapid_detail=", ".join(rapid.get("active",[])) if rapid.get("active") else "동시 급변 신호 없음"
+_rapid_value=rapid.get("level","정상")
+st.markdown(
+    f'<div class="signal-grid">'
+    f'<div class="signal-card"><div class="signal-name">구조적 경보</div><div class="signal-value">{_structure_value}</div><div class="signal-detail">{_structure_detail}</div></div>'
+    f'<div class="signal-card"><div class="signal-name">급변 경보</div><div class="signal-value">{_rapid_value}</div><div class="signal-detail">{_rapid_detail}</div></div>'
+    f'</div>',unsafe_allow_html=True)
+
 comments=[]
 if pd.notna(dev):
-    if dev>=15: comments.append("S&P500이 200일 이동평균을 크게 웃돌아 시장 과열 부담이 매우 높습니다.")
-    elif dev>=10: comments.append("S&P500이 200일 이동평균을 크게 웃돌아 과열 부담이 높아지고 있습니다.")
-    elif dev<=0: comments.append("S&P500의 200일선 기준 과열 부담은 낮은 상태입니다.")
-if pd.notna(latest(vix)) and latest(vix)>=25: comments.append("VIX가 높은 수준으로 올라 시장 변동성 부담이 커졌습니다.")
-if pd.notna(sahm_now):
-    if sahm_now>=.5: comments.append("Sahm Rule 기준으로 경기침체 경보 수준에 도달했습니다.")
-    elif sahm_now>=.3: comments.append("실업률 상승폭이 커지면서 고용시장 위험 신호가 나타나고 있습니다.")
-if pd.notna(latest(hy)) and latest(hy)>=5: comments.append("하이일드 신용스프레드가 확대돼 신용시장 위험에 주의가 필요합니다.")
-if not comments: comments.append("현재 주요 지표에서는 뚜렷한 극단적 위험 신호가 나타나지 않고 있습니다.")
+    if dev>=15: comments.append("S&P500의 200일선 대비 과열 수준이 매우 높습니다.")
+    elif dev>=10: comments.append("S&P500의 200일선 대비 과열 부담이 높은 편입니다.")
+    elif dev<=0: comments.append("S&P500의 200일선 기준 가격 과열 부담은 낮은 상태입니다.")
+_cape_now=details.get("market",{}).get("cape",np.nan)
+if pd.notna(_cape_now) and details.get("market",{}).get("valuation",0)>=80: comments.append(f"CAPE가 {_cape_now:.1f}배로 역사적 고평가 구간에 있습니다.")
+if rapid.get("level") in ("급변 경보","강한 스트레스"): comments.append("서로 다른 빠른 지표가 동시에 악화돼 단기 시장 스트레스가 확인됩니다.")
+elif rapid.get("level")=="관찰": comments.append("한 개 이상의 빠른 지표가 급변해 추가 확인이 필요한 상태입니다.")
+if structure.get("count",0)>=2: comments.append("여러 구조적 취약성이 동시에 나타나 중기 하락 위험을 주의해서 볼 필요가 있습니다.")
+if not comments: comments.append("현재 구조적 취약성과 급변 신호가 동시에 강하게 나타나지는 않고 있습니다.")
 st.info("**현재 시장 해석**\n\n"+" ".join(comments))
 
 st.markdown('<div class="section"><h3>구성요소 위험도</h3></div>',unsafe_allow_html=True)
-labels={"시장추세":"시장 위험","변동성":"변동성 위험","금리":"금리 위험","신용":"신용시장 위험","경기":"경기 위험","물가":"물가 위험"}
+labels={"시장·밸류에이션":"시장·밸류에이션 위험","변동성":"변동성 위험","금리":"금리 위험","신용":"신용시장 위험","경기":"경기 위험","물가":"물가 위험"}
 infos={
-    "시장추세":"시장 붕괴 여부가 아니라 S&P500의 과열 정도를 봅니다. 200일 이동평균 대비 이격도가 커질수록 과열 위험을 높게 평가합니다. 200일선 아래에서는 과열 위험이 낮아집니다.",
-    "변동성":"VIX의 장기 상대 수준과 최근 5거래일 급등 정도를 함께 반영합니다. VIX가 높거나 짧은 기간에 급등하면 위험도가 올라갑니다.",
-    "금리":"10년물-2년물 금리차, 10년물-EFFR 차이, 10년물 국채수익률을 각각 40%·35%·25%로 반영합니다.",
-    "신용":"하이일드 OAS와 BBB OAS의 절대 수준, 최근 약 20거래일 스프레드 확대 속도를 반영합니다. 단순 최근 3년 백분위만 사용하지 않습니다.",
-    "경기":"실업률의 장기 상대 수준, Sahm Rule, 신규 실업수당 청구건수 4주 평균의 전년 대비 변화를 함께 반영합니다.",
-    "물가":"헤드라인 CPI, 근원 CPI, 근원 PCE의 전년 대비 상승률을 각각 장기 상대 수준으로 환산해 종합합니다."
+    "시장·밸류에이션":"S&P500의 200일 이동평균 대비 과열 45%, CAPE 밸류에이션 35%, 최근 20거래일 상승 모멘텀 20%를 반영합니다. 폭락 이후 가격 하락 자체를 위험점수로 추가하지 않습니다.",
+    "변동성":"현재 VIX 절대 수준 55% + 최근 5거래일 급등 45%입니다. 급등은 상승률과 포인트 상승폭을 함께 봅니다.",
+    "금리":"10년물 수준 35% + 최근 20거래일 상승속도 25% + 10Y-2Y 15% + 10Y-EFFR 15% + 10년물 기간프리미엄 10%입니다.",
+    "신용":"하이일드 OAS 수준 45% + BBB OAS 수준 20% + 최근 5거래일 확대 15% + 최근 20거래일 확대 20%입니다.",
+    "경기":"실업률 수준 30% + Sahm Rule 35% + 신규 실업수당 35%입니다. Sahm Rule은 신규 실업수당의 최근 8주 상승 추세가 확인되지 않으면 강도를 제한합니다.",
+    "물가":"CPI 25% + 근원 CPI 35% + 근원 PCE 40%이며, 각 지표에서 전년동월비와 최근 3개월 연율화 흐름을 함께 반영합니다. 최근 흐름의 비중을 더 높였습니다."
 }
 risk_cards=[]
 for k in scores:
@@ -599,19 +808,15 @@ st.markdown('<div class="market-grid">'+''.join(market_cards)+'</div>',unsafe_al
 st.caption("ⓘ 데스크톱에서는 마우스를 올리고, 모바일에서는 터치하면 지표 설명을 볼 수 있습니다. 환율·달러인덱스는 참고자료이며 위험지수 산식에는 포함하지 않습니다.")
 
 @st.cache_data(ttl=3600,show_spinner=False)
-def historical_risk_fast(data):
+def historical_risk_fast(data,cape):
     months=pd.date_range(pd.Timestamp.now().normalize()-pd.DateOffset(months=12),pd.Timestamp.now().normalize(),freq="MS")
     rows=[]
     for dt in months:
         sub={k:v.loc[:dt].dropna() for k,v in data.items()}
-        if len(sub["S&P500"])<220 or len(sub["VIX"])<30 or len(sub["10년물"])<30: continue
-        mm,_=market_overheat_score(sub["S&P500"]); vv=volatility_score(sub["VIX"])
-        s210=(sub["10년물"]-sub["2년물"]).dropna(); sf=(sub["10년물"]-sub["기준금리"]).dropna()
-        rr=weighted_custom({"curve":percentile_score(s210,latest(s210),False),"policy":percentile_score(sf,latest(sf),True),"level":percentile_score(sub["10년물"],latest(sub["10년물"]),True)}, {"curve":.40,"policy":.35,"level":.25})
-        cr=credit_score(sub["하이일드스프레드"],sub["BBB스프레드"])
-        ec=economy_score(sub["실업률"],sub["신규실업수당"])
-        inf=inflation_score(sub["CPI"],sub["근원CPI"],sub["근원PCE"])
-        rows.append((dt,weighted({"시장추세":mm,"변동성":vv,"금리":rr,"신용":cr,"경기":ec,"물가":inf})))
+        if len(sub.get("S&P500",pd.Series(dtype=float)))<220 or len(sub.get("VIX",pd.Series(dtype=float)))<30 or len(sub.get("10년물",pd.Series(dtype=float)))<30: continue
+        sub_cape=cape.loc[:dt].dropna() if len(cape) else cape
+        snap=compute_snapshot(sub,sub_cape,with_alerts=False)
+        rows.append((dt,snap["overall"]))
     return pd.DataFrame(rows,columns=["date","risk"]).set_index("date") if rows else pd.DataFrame(columns=["risk"])
 
 def render_history_chart(hist):
@@ -630,7 +835,8 @@ const NS='http://www.w3.org/2000/svg',W=Math.max(320,wrap.clientWidth),H=320,L=5
 const vals=data.map(d=>d.risk),rawMin=Math.min(...vals),rawMax=Math.max(...vals),ymin=Math.max(0,Math.floor((rawMin-5)/10)*10),ymax=Math.min(100,Math.ceil((rawMax+5)/10)*10||ymin+10);
 const x=i=>L+(data.length===1?PW/2:i*PW/(data.length-1)),y=v=>T+(ymax-v)*PH/(ymax-ymin||1),el=(n,a={})=>{const q=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>q.setAttribute(k,v));return q};
 for(let j=0;j<=4;j++){const v=ymin+(ymax-ymin)*j/4,yy=y(v);svg.appendChild(el('line',{x1:L,y1:yy,x2:W-R,y2:yy,stroke:'#eceef1','stroke-width':'1'}));const t=el('text',{x:L-10,y:yy+4,'text-anchor':'end',fill:'#7a8089','font-size':'12'});t.textContent=v.toFixed(1);svg.appendChild(t)}
-const ticks=[];data.forEach((d,i)=>{if(i===0||i===data.length-1||d.month===1||i%2===0)ticks.push(i)});[...new Set(ticks)].forEach(i=>{const d=data[i],t=el('text',{x:x(i),y:H-14,'text-anchor':'middle',fill:'#7a8089','font-size':'12'});t.textContent=(i===0||d.month===1)?`${d.year}년 ${d.month}월`:`${d.month}월`;svg.appendChild(t)});
+const yt=el('text',{x:13,y:T+PH/2,'text-anchor':'middle',fill:'#7a8089','font-size':'11',transform:`rotate(-90 13 ${T+PH/2})`});yt.textContent='위험지수';svg.appendChild(yt);
+const ticks=[],step=W<500?3:2;data.forEach((d,i)=>{if(i===0||i===data.length-1||d.month===1||i%step===0)ticks.push(i)});[...new Set(ticks)].forEach(i=>{const d=data[i],t=el('text',{x:x(i),y:H-14,'text-anchor':'middle',fill:'#7a8089','font-size':W<500?'11':'12'});t.textContent=(i===0)?`${String(d.year).slice(-2)}년 ${d.month}월`:(d.month===1?`${String(d.year).slice(-2)}년`:`${d.month}월`);svg.appendChild(t)});
 svg.appendChild(el('polyline',{points:data.map((d,i)=>`${x(i)},${y(d.risk)}`).join(' '),fill:'none',stroke:'#5a67d8','stroke-width':'2.5','stroke-linejoin':'round','stroke-linecap':'round','vector-effect':'non-scaling-stroke'}));data.forEach((d,i)=>svg.appendChild(el('circle',{cx:x(i),cy:y(d.risk),r:'3.2',fill:'#fff',stroke:'#5a67d8','stroke-width':'2','vector-effect':'non-scaling-stroke'})));
 const show=clientX=>{const rect=wrap.getBoundingClientRect(),px=Math.max(0,Math.min(rect.width,clientX-rect.left)),idx=Math.max(0,Math.min(data.length-1,Math.round(px/rect.width*(data.length-1)))),d=data[idx];tip.innerHTML=`<b>날짜</b> ${d.date}<br><b>위험지수</b> ${d.risk.toFixed(1)}`;tip.style.display='block';requestAnimationFrame(()=>{let left=px+12;if(left+tip.offsetWidth>rect.width)left=px-tip.offsetWidth-12;tip.style.left=Math.max(4,left)+'px';tip.style.top=Math.max(6,(y(d.risk)/H*rect.height)-tip.offsetHeight-10)+'px'})},hide=()=>tip.style.display='none';
 wrap.addEventListener('mousemove',e=>show(e.clientX));wrap.addEventListener('mouseleave',hide);wrap.addEventListener('touchstart',e=>{if(e.touches[0])show(e.touches[0].clientX)},{passive:true});wrap.addEventListener('touchmove',e=>{if(e.touches[0])show(e.touches[0].clientX)},{passive:true});wrap.addEventListener('touchend',hide,{passive:true});wrap.addEventListener('touchcancel',hide,{passive:true});document.addEventListener('touchstart',e=>{if(!wrap.contains(e.target))hide()},{passive:true});
@@ -643,7 +849,7 @@ if "show_history" not in st.session_state: st.session_state.show_history=False
 if st.button("최근 1년 추이 불러오기",type="secondary"):
     st.session_state.show_history=True
 if st.session_state.show_history:
-    with st.spinner("추이 계산 중…"): hist=historical_risk_fast(data)
+    with st.spinner("추이 계산 중…"): hist=historical_risk_fast(data,cape)
     if len(hist):
         render_history_chart(hist)
         st.caption("최근 1년 월별 스냅샷 · 최초 계산 후 서버 공용 캐시를 최대 1시간 재사용")
@@ -651,24 +857,30 @@ if st.session_state.show_history:
 else: st.caption("초기 로딩 속도를 위해 과거 추이 계산은 필요할 때만 실행합니다.")
 
 st.markdown('<div class="section"><h3>경기침체 신호</h3></div>',unsafe_allow_html=True)
-_recession_status="발생" if pd.notna(sahm_now) and sahm_now>=.5 else "정상"
+_claims_confirm=bool(details.get("economy",{}).get("claims_confirm",False))
+if pd.notna(sahm_now) and sahm_now>=.5 and _claims_confirm: _recession_status="확인"
+elif pd.notna(sahm_now) and sahm_now>=.5: _recession_status="관찰"
+else: _recession_status="정상"
 # 명확한 3개 카드 구성
 _sahm_text=f"{sahm_now:.2f}%p" if pd.notna(sahm_now) else "N/A"
 _recession_html=(f'<div class="recession-grid">'
                  f'<div class="recession-card"><div class="recession-name">실업률</div><div class="recession-value">{latest(unemp):.1f}%</div></div>'
                  f'<div class="recession-card"><div class="recession-name">Sahm Rule</div><div class="recession-value">{_sahm_text}</div></div>'
-                 f'<div class="recession-card"><div class="recession-name">침체 경보</div><div class="recession-value">{_recession_status}</div></div>'
+                 f'<div class="recession-card"><div class="recession-name">침체 신호</div><div class="recession-value">{_recession_status}</div></div>'
                  '</div>')
 st.markdown(_recession_html,unsafe_allow_html=True)
 
 with st.expander("세부 데이터 및 계산 기준"):
-    st.write("시장: S&P500의 200일 이동평균 대비 이격도를 이용한 과열 위험. 하락 스트레스는 이 점수에 직접 포함하지 않습니다.")
-    st.write("변동성: VIX 장기 상대수준 75% + 최근 5거래일 급등 25%.")
-    st.write("금리: 10Y-2Y 40% + 10Y-EFFR 35% + 10년물 국채수익률 25%. 기존 구조 유지.")
-    st.write("신용: HY OAS 절대수준 55% + BBB OAS 절대수준 25% + 최근 스프레드 확대속도 20%.")
-    st.write("경기: 실업률 40% + Sahm Rule 40% + 신규 실업수당 청구건수 20%.")
-    st.write("물가: CPI 40% + 근원 CPI 35% + 근원 PCE 25%.")
+    st.write("종합위험지수: 시장·밸류에이션 25% + 금리 25% + 신용 15% + 경기 17% + 변동성 10% + 물가 8%.")
+    st.write("시장·밸류에이션: 200일선 과열 45% + CAPE 35% + 최근 20거래일 상승 모멘텀 20%. 폭락 자체는 추가 위험으로 가산하지 않습니다.")
+    st.write("변동성: 현재 VIX 절대수준 55% + 최근 5거래일 급등 45%.")
+    st.write("금리: 10년물 수준 35% + 최근 20거래일 상승속도 25% + 10Y-2Y 15% + 10Y-EFFR 15% + 10년물 기간프리미엄 10%.")
+    st.write("신용: HY OAS 45% + BBB OAS 20% + 최근 5거래일 확대 15% + 최근 20거래일 확대 20%.")
+    st.write("경기: 실업률 30% + Sahm Rule 35% + 신규 실업수당 35%. Sahm 단독 신호는 신규 실업수당의 최근 8주 상승 추세가 확인되지 않으면 강도를 제한합니다.")
+    st.write("물가: CPI 25% + 근원 CPI 35% + 근원 PCE 40%. 각 지표에서 전년동월비와 최근 3개월 연율화를 함께 반영합니다.")
+    st.write("구조적 경보와 급변 경보는 종합위험점수에 단순 가산하지 않고 별도 레이어로 표시합니다.")
+    st.write("CAPE는 Shiller PE 월별 공개 표를 보조 데이터로 사용하며, 수집 실패 시 해당 세부 비중은 자동으로 제외·재정규화합니다.")
     st.write("현재 2·10·30년물은 가능한 경우 미 재무부 공식 일일 수익률곡선의 더 최신 값을 우선 반영하며 기준금리는 일간 EFFR을 사용합니다.")
     st.write("환율: 원/달러, 엔/달러, 달러인덱스는 참고표시 전용이며 종합위험지수에는 포함하지 않습니다.")
 
-st.caption(f"Risk Monitor 3.31.1 Responsive Web Hotfix · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime('%Y-%m-%d %H:%M:%S KST')} · 캐시 즉시 표시 · 백그라운드 최신화")
+st.caption(f"Risk Monitor 3.32.0 Multi-Layer Risk Engine · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime('%Y-%m-%d %H:%M:%S KST')} · 캐시 즉시 표시 · 백그라운드 최신화")
