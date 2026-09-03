@@ -15,6 +15,7 @@ st.markdown("""<style>
 html,body,[class*="css"],.stApp,.stMarkdown,.stCaption,button,input,textarea,select{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Apple SD Gothic Neo","Noto Sans KR","Segoe UI",sans-serif!important}
 .block-container{max-width:1180px;padding-top:2.2rem;padding-bottom:4rem}
 .dev-credit{font-size:12px;color:#8b8f98;font-weight:600;letter-spacing:-.01em;margin-top:-.35rem;margin-bottom:.35rem}
+.app-title-row{display:flex;align-items:center;gap:12px;margin-top:2px;margin-bottom:2px}.app-title-icon{width:38px;height:38px;border:1px solid #e1e5ea;border-radius:12px;display:flex;align-items:center;justify-content:center;background:#fff;box-shadow:0 3px 12px rgba(0,0,0,.045);flex:0 0 38px}.app-title-icon svg{width:23px;height:23px}.app-title-text{font-size:2.35rem;line-height:1.08;font-weight:850;letter-spacing:-.055em;color:#20232b;margin:0}.overview-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0 8px}.overview-card{border:1px solid #e3e6eb;border-radius:22px;padding:18px 20px;background:rgba(255,255,255,.80);min-height:154px;box-sizing:border-box}.overview-head{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:800;color:#555b65;margin-bottom:14px}.overview-head-icon{width:28px;height:28px;border:1px solid #e4e7eb;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;background:#fff;flex:0 0 28px}.overview-head-icon svg{width:17px;height:17px}.overview-main{display:flex;align-items:baseline;gap:6px;min-height:48px}.overview-score{font-size:46px;line-height:1;font-weight:850;letter-spacing:-.055em;color:#2b2f37}.overview-unit{font-size:16px;font-weight:700;color:#444a54}.overview-status{display:flex;align-items:center;gap:8px;font-size:24px;font-weight:850;letter-spacing:-.035em;color:#282c34;min-height:48px}.overview-status .signal-status-dot{width:11px;height:11px;flex-basis:11px}.overview-sub{font-size:12px;color:#737983;margin-top:9px;line-height:1.45;min-height:18px}.overview-delta{font-size:11.5px;color:#717781;border-top:1px solid #eceef1;margin-top:12px;padding-top:9px}.overview-count{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;background:#f2f3f5;color:#656b74;font-size:10.5px;font-weight:750;margin-left:4px;white-space:nowrap}
 .hero{border:1px solid #e5e7eb;border-radius:28px;padding:30px 32px;margin:12px 0 22px;background:rgba(255,255,255,.72)}
 .hero-score{font-size:64px;line-height:1;font-weight:850;letter-spacing:-.06em;color:#30323a}
 .score-row{display:flex;align-items:baseline;gap:14px;margin-top:6px;flex-wrap:wrap}
@@ -67,6 +68,7 @@ div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:
   div[data-testid="stMetric"]{padding:12px}
   .recession-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.recession-card{min-height:64px;padding:9px 8px;border-radius:14px}.recession-name{font-size:10.5px;margin-bottom:5px}.recession-value{font-size:16px}
   .signal-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}.signal-card{min-height:92px;padding:13px 11px;border-radius:15px}.signal-name{font-size:10.5px;margin-bottom:8px}.signal-status{gap:6px;min-height:22px}.signal-status-dot{width:9px;height:9px;flex-basis:9px}.signal-value{font-size:18px}.signal-count{font-size:9.5px;min-height:18px;padding:1px 6px}.signal-detail{font-size:10.5px;margin-top:7px;line-height:1.4}
+  .app-title-row{gap:9px}.app-title-icon{width:32px;height:32px;border-radius:10px;flex-basis:32px}.app-title-icon svg{width:19px;height:19px}.app-title-text{font-size:1.82rem;line-height:1.08}.overview-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:10px 0 7px}.overview-card{min-height:128px;padding:11px 9px;border-radius:15px}.overview-head{gap:5px;font-size:10px;margin-bottom:10px;line-height:1.25}.overview-head-icon{width:20px;height:20px;border-radius:7px;flex-basis:20px}.overview-head-icon svg{width:12px;height:12px}.overview-main{min-height:36px}.overview-score{font-size:31px}.overview-unit{font-size:11px}.overview-status{gap:5px;font-size:17px;min-height:36px;line-height:1.1}.overview-status .signal-status-dot{width:8px;height:8px;flex-basis:8px}.overview-sub{font-size:9.5px;margin-top:6px;line-height:1.35;min-height:25px}.overview-delta{font-size:9.5px;margin-top:7px;padding-top:6px}.overview-count{font-size:8.5px;padding:1px 5px;margin-left:1px}
 }
 </style>""", unsafe_allow_html=True)
 
@@ -228,10 +230,10 @@ def _fetch_yahoo_symbol(ticker):
 
 
 def _refresh_fx():
-    tickers={"원/달러":"USDKRW=X","엔/달러":"USDJPY=X","달러인덱스":"DX-Y.NYB"}
+    tickers={"원/달러":"USDKRW=X","엔/달러":"USDJPY=X","달러인덱스":"DX-Y.NYB","WTI 유가":"CL=F"}
     snap={"updated":time.time(),"source":"Yahoo Finance","items":{}}
     errors=[]
-    with ThreadPoolExecutor(max_workers=3) as ex:
+    with ThreadPoolExecutor(max_workers=4) as ex:
         futs={ex.submit(_fetch_yahoo_symbol,t):name for name,t in tickers.items()}
         for f,name in [(f,n) for f,n in futs.items()]:
             try: snap["items"][name]=f.result()
@@ -674,33 +676,35 @@ else:
 current_fast=fast_signal_scores(details)
 rapid=rapid_alert(current_fast,prev_fast)
 
-st.title("미국 증시 종합 위험지수")
+st.markdown('''<div class="app-title-row">
+<div class="app-title-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#2f7d5a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8 19 5.6v5.2c0 4.6-2.7 8.2-7 10.4-4.3-2.2-7-5.8-7-10.4V5.6L12 2.8Z"/><path d="m8.2 13.2 2.2-2.2 1.8 1.7 3.6-4"/></svg></div>
+<div class="app-title-text">미국 증시 종합 위험지수</div></div>''', unsafe_allow_html=True)
 st.markdown('<div class="dev-credit">Developed by 유유상</div>', unsafe_allow_html=True)
 st.caption("시장·밸류에이션·금리·신용·경기·물가를 현재 공개 데이터 기준으로 자동 분석")
 refresh_indicator(); _,delta_text,delta_class=delta_value(overall,prev_overall)
-
-st.markdown(f"""<div class="hero"><div class="hero-title">위험지수</div><div class="score-row">
-<div class="hero-score">{overall:.1f}<span class="score-unit"> /100</span></div>
-</div><div class="hero-state"><span class="risk-dot {risk_class(overall)}"></span>{label(overall)}</div></div>""",unsafe_allow_html=True)
-st.markdown(f"**전일 비교** <span class='delta-{delta_class}'>{delta_text}</span>",unsafe_allow_html=True)
 
 _structure_detail=", ".join(x[0] for x in structure.get("items",[])) if structure.get("items") else "뚜렷한 구조적 위험 신호 없음"
 _structure_raw=structure.get("level","정상")
 _structure_state={"정상":("정상","normal"),"관찰":("관찰","watch"),"주의":("주의","caution"),"경계":("경고","alert")}.get(_structure_raw,(str(_structure_raw),"watch"))
 _structure_count=int(structure.get("count",0) or 0)
-_structure_count_html=f'<span class="signal-count">{_structure_count}개</span>' if _structure_count else ""
+_structure_count_html=f'<span class="overview-count">{_structure_count}개</span>' if _structure_count else ""
 _rapid_detail=", ".join(rapid.get("active",[])) if rapid.get("active") else "동시 급변 신호 없음"
 _rapid_raw=rapid.get("level","정상")
 _rapid_state={"정상":("정상","normal"),"관찰":("관찰","watch"),"급변 경보":("주의","caution"),"강한 스트레스":("경고","alert")}.get(_rapid_raw,(str(_rapid_raw),"watch"))
 _rapid_count=int(rapid.get("count",0) or 0)
-_rapid_count_html=f'<span class="signal-count">{_rapid_count}개</span>' if _rapid_count else ""
+_rapid_count_html=f'<span class="overview-count">{_rapid_count}개</span>' if _rapid_count else ""
 _structure_detail_html=html.escape(_structure_detail)
 _rapid_detail_html=html.escape(_rapid_detail)
+
+_shield='''<svg viewBox="0 0 24 24" fill="none" stroke="#4a5568" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8 19 5.6v5.2c0 4.6-2.7 8.2-7 10.4-4.3-2.2-7-5.8-7-10.4V5.6L12 2.8Z"/><path d="m8.2 13.2 2.2-2.2 1.8 1.7 3.6-4"/></svg>'''
+_warn='''<svg viewBox="0 0 24 24" fill="none" stroke="#c98b00" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 4.2 2.8 17.3a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>'''
+_bell='''<svg viewBox="0 0 24 24" fill="none" stroke="#2f7d5a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>'''
 st.markdown(
-    f'<div class="signal-grid">'
-    f'<div class="signal-card"><div class="signal-name">구조적 위험 신호</div><div class="signal-status"><span class="signal-status-dot {_structure_state[1]}"></span><span class="signal-value">{_structure_state[0]}</span>{_structure_count_html}</div><div class="signal-detail">{_structure_detail_html}</div></div>'
-    f'<div class="signal-card"><div class="signal-name">시장 급변 신호</div><div class="signal-status"><span class="signal-status-dot {_rapid_state[1]}"></span><span class="signal-value">{_rapid_state[0]}</span>{_rapid_count_html}</div><div class="signal-detail">{_rapid_detail_html}</div></div>'
-    f'</div>',unsafe_allow_html=True)
+    f'<div class="overview-grid">'
+    f'<div class="overview-card"><div class="overview-head"><span class="overview-head-icon">{_shield}</span>위험지수</div><div class="overview-main"><span class="overview-score">{overall:.1f}</span><span class="overview-unit">/100</span></div><div class="overview-sub"><span class="risk-dot {risk_class(overall)}"></span>&nbsp; <b>{label(overall)}</b></div><div class="overview-delta">전일 대비 <span class="delta-{delta_class}">{delta_text}</span></div></div>'
+    f'<div class="overview-card"><div class="overview-head"><span class="overview-head-icon">{_warn}</span>구조적 위험 신호</div><div class="overview-status"><span class="signal-status-dot {_structure_state[1]}"></span>{_structure_state[0]}{_structure_count_html}</div><div class="overview-sub">{_structure_detail_html}</div></div>'
+    f'<div class="overview-card"><div class="overview-head"><span class="overview-head-icon">{_bell}</span>시장 급변 신호</div><div class="overview-status"><span class="signal-status-dot {_rapid_state[1]}"></span>{_rapid_state[0]}{_rapid_count_html}</div><div class="overview-sub">{_rapid_detail_html}</div></div>'
+    f'</div>', unsafe_allow_html=True)
 
 comments=[]
 if pd.notna(dev):
@@ -781,7 +785,8 @@ market_info={
     "엔/달러":"미국 달러 1달러당 일본 엔화 가격입니다. 엔화 가치와 글로벌 달러 흐름을 참고하는 지표입니다.",
     "달러인덱스":"주요 통화 대비 미국 달러의 상대적 강도를 나타내는 달러인덱스(DXY)입니다.",
     "하이일드 스프레드":"미국 투기등급 회사채가 국채보다 추가로 요구하는 금리입니다. 커질수록 신용시장 스트레스가 높다는 의미입니다.",
-    "CPI":"미국 소비자물가지수의 전년 대비 상승률입니다. 소비자가 체감하는 전반적인 물가 압력을 보여줍니다."
+    "CPI":"미국 소비자물가지수의 전년 대비 상승률입니다. 소비자가 체감하는 전반적인 물가 압력을 보여줍니다.",
+    "WTI 유가":"서부텍사스산원유(WTI) 선물의 현재 가격입니다. 에너지 비용과 물가 압력, 경기 기대를 참고하는 시장 지표이며 종합위험지수 산식에는 포함하지 않습니다."
 }
 
 market_items=[]
@@ -799,6 +804,11 @@ for name in ("원/달러","엔/달러","달러인덱스"):
     v,dlt,cls=_fmt_fx(name,2)
     market_items.append((name,v,dlt,cls))
 
+v,dlt,cls=_fmt_fx("WTI 유가",2)
+if v not in ("갱신 중…","N/A"):
+    v=f"${v}"
+market_items.append(("WTI 유가",v,dlt,cls))
+
 v,dlt,cls=_series_delta(hy,"%p",2)
 market_items.append(("하이일드 스프레드",v,dlt,cls))
 v,dlt,cls=_cpi_yoy_display(cpi)
@@ -813,7 +823,7 @@ for n,v,dlt,cls in market_items:
         f'</div><div class="market-value">{v}</div><div class="market-delta delta-{cls}">{dlt}</div></div>'
     )
 st.markdown('<div class="market-grid">'+''.join(market_cards)+'</div>',unsafe_allow_html=True)
-st.caption("ⓘ 데스크톱에서는 마우스를 올리고, 모바일에서는 터치하면 지표 설명을 볼 수 있습니다. 환율·달러인덱스는 참고자료이며 위험지수 산식에는 포함하지 않습니다.")
+st.caption("ⓘ 데스크톱에서는 마우스를 올리고, 모바일에서는 터치하면 지표 설명을 볼 수 있습니다. 환율·달러인덱스·WTI 유가는 참고자료이며 위험지수 산식에는 포함하지 않습니다.")
 
 @st.cache_data(ttl=3600,show_spinner=False)
 def historical_risk_fast(data,cape):
@@ -889,6 +899,6 @@ with st.expander("세부 데이터 및 계산 기준"):
     st.write("구조적 위험 신호와 시장 급변 신호는 종합위험점수에 단순 가산하지 않고 별도 레이어로 표시합니다.")
     st.write("CAPE는 Shiller PE 월별 공개 표를 보조 데이터로 사용하며, 수집 실패 시 해당 세부 비중은 자동으로 제외·재정규화합니다.")
     st.write("현재 2·10·30년물은 가능한 경우 미 재무부 공식 일일 수익률곡선의 더 최신 값을 우선 반영하며 기준금리는 일간 EFFR을 사용합니다.")
-    st.write("환율: 원/달러, 엔/달러, 달러인덱스는 참고표시 전용이며 종합위험지수에는 포함하지 않습니다.")
+    st.write("참고지표: 원/달러, 엔/달러, 달러인덱스, WTI 유가는 표시 전용이며 종합위험지수에는 포함하지 않습니다.")
 
-st.caption(f"Risk Monitor 3.33.0 Signal Readability · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime('%Y-%m-%d %H:%M:%S KST')} · 캐시 즉시 표시 · 백그라운드 최신화")
+st.caption(f"Risk Monitor 3.34.0 Overview + WTI · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime('%Y-%m-%d %H:%M:%S KST')} · 캐시 즉시 표시 · 백그라운드 최신화")
