@@ -83,7 +83,7 @@ SERIES={
 }
 WEIGHTS={"시장·밸류에이션":.25,"변동성":.10,"금리":.25,"신용":.15,"경기":.17,"물가":.08}
 
-# v3.37 데이터 공급자 추상화: 산식/UI는 공급자 심볼 대신 내부 표준 키를 사용한다.
+# v3.38 데이터 공급자 추상화: 산식/UI는 공급자 심볼 대신 내부 표준 키를 사용한다.
 # 완성본에서 실시간 API로 교체할 때 이 매핑/어댑터만 바꾸면 된다.
 CANONICAL_DATA={
     "EFFR":{"internal":"기준금리","provider":"FRED","symbol":"EFFR"},
@@ -738,239 +738,192 @@ if prev_snapshot is not None:
     prev_rapid=rapid_alert(prev_fast,{})
     prev_overall,_=apply_risk_floors(prev_snapshot["overall"],prev_structure,prev_rapid,prev_data["S&P500"],prev_data["VIX"],prev_fast.get("신용",np.nan))
 
-st.markdown('''<div class="app-title-row"><div class="app-title-text">미국 증시 종합 위험지수</div></div>''', unsafe_allow_html=True)
-st.markdown('<div class="dev-credit">Developed by 유유상 · v3.37.0</div>', unsafe_allow_html=True)
-st.caption("시장·밸류에이션·금리·신용·경기·물가를 현재 공개 데이터 기준으로 자동 분석")
-refresh_indicator(); _,delta_text,delta_class=delta_value(overall,prev_overall)
+# v3.38.0 full dashboard redesign — Streamlit engine + custom HTML/CSS skin.
+st.markdown("""<style>
+html,body,.stApp{background:#f5f7fb!important;color:#171b23}
+header[data-testid="stHeader"]{background:transparent!important}
+.block-container{max-width:none!important;padding:26px 28px 54px 188px!important}
+[data-testid="stSidebar"]{display:none!important} [data-testid="stToolbar"]{right:10px!important} #MainMenu{visibility:hidden}
+.r38-sidebar{position:fixed;z-index:50;left:0;top:0;bottom:0;width:158px;background:linear-gradient(180deg,#101b2d,#0d1726);color:#fff;padding:22px 13px 18px;box-sizing:border-box}.r38-brand{display:flex;align-items:center;gap:9px;padding:0 9px 20px;font-size:13px;font-weight:800;line-height:1.25}.r38-brand-mark{width:27px;height:32px}.r38-brand-mark svg{width:27px;height:32px}.r38-nav{display:flex;flex-direction:column;gap:6px}.r38-nav-item{display:flex;align-items:center;gap:11px;height:40px;border-radius:7px;padding:0 11px;color:#aeb9c9;font-size:12.5px;font-weight:650}.r38-nav-item.active{background:linear-gradient(90deg,#365dce,#506be6);color:#fff;box-shadow:0 5px 16px rgba(45,78,190,.28)}.r38-nav-icon{width:17px;text-align:center;font-size:15px}.r38-side-bottom{position:absolute;left:20px;right:20px;bottom:20px;border-top:1px solid rgba(255,255,255,.08);padding-top:16px;color:#9eabba;font-size:10.5px;line-height:1.55}.r38-side-title{color:#dbe3ef;font-weight:700}.r38-toggle{display:flex;align-items:center;justify-content:space-between;margin-top:16px}.r38-toggle-pill{width:34px;height:18px;border-radius:999px;background:#566274;position:relative}.r38-toggle-pill:after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:#d9dee6;left:2px;top:2px}
+.r38-mobilebar{display:none}.r38-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}.r38-title{font-size:24px;font-weight:850;letter-spacing:-.045em;line-height:1.18}.r38-subtitle{font-size:12px;color:#69717d;margin-top:5px}.r38-credit{font-size:10px;color:#939aa5;margin-top:2px}.r38-head-actions{display:flex;gap:10px}.r38-action{height:40px;border:1px solid #dfe4eb;border-radius:8px;background:#fff;padding:0 14px;display:flex;align-items:center;font-size:12px;font-weight:650;color:#3c4654}
+.r38-panel{background:#fff;border:1px solid #dde3eb;border-radius:11px;padding:14px;margin-bottom:14px;box-shadow:0 1px 2px rgba(25,38,58,.025)}.r38-section-title{display:flex;align-items:center;gap:7px;font-size:14px;font-weight:820;color:#202631;margin-bottom:12px}.r38-info{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border:1px solid #9da5af;border-radius:50%;font-size:9px;color:#7d8590;font-weight:800}
+.r38-hero-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.r38-hero-card{position:relative;min-height:245px;border:1px solid #e3e7ed;border-radius:10px;padding:15px;box-sizing:border-box;background:#fff;overflow:hidden}.r38-hero-card.danger{border-color:#f0dddd}.r38-hero-card.warn{border-color:#f0e4cf}.r38-card-title{font-size:13px;font-weight:800;color:#3a4049;display:flex;align-items:center;gap:6px}.r38-horizon{font-size:10px;color:#8b929d;margin-top:3px}.r38-hero-main{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}.r38-big{font-size:35px;font-weight:850;line-height:1;letter-spacing:-.05em}.r38-big.red{color:#d92f3b}.r38-big.orange{color:#d77b00}.r38-unit{font-size:12px;font-weight:600;color:#555d68;margin-left:4px}.r38-badge{display:inline-flex;border-radius:999px;padding:4px 8px;font-size:10px;font-weight:800;margin-top:8px}.r38-badge.red{color:#fff;background:#e83d49}.r38-badge.orange{color:#fff;background:#f09a18}.r38-badge.green{color:#fff;background:#2ca675}.r38-badge.gray{color:#5e6672;background:#eef1f5}.r38-delta-label{font-size:9.5px;color:#737b87;margin-top:12px}.r38-delta{font-size:11px;margin-top:4px;font-weight:750}.r38-up{color:#e03b45}.r38-down{color:#2f70c9}.r38-flat{color:#8b929d}.r38-gauge{width:118px;height:74px;flex:0 0 118px}.r38-gauge svg{width:100%;height:100%}.r38-gauge-label{font-size:8px;fill:#8b929d}.r38-callout{position:absolute;left:10px;right:10px;bottom:10px;border-radius:8px;padding:10px 11px;font-size:10px;line-height:1.45;background:#fff6f6;border:1px solid #f5dede;color:#5c3b3e}.r38-callout.warn{background:#fff9ef;border-color:#f3e4c9;color:#69523a}.r38-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}.r38-chip{display:inline-flex;padding:4px 7px;border-radius:999px;background:#fff0f0;border:1px solid #f3d3d3;color:#c33b42;font-size:9.5px;font-weight:750}.r38-chip.warn{background:#fff5e7;border-color:#f0ddbd;color:#a76600}.r38-interpret{margin-top:10px;padding:10px 12px;border-radius:8px;background:#f8fafc;border:1px solid #e7ebf0;font-size:10.5px;line-height:1.55;color:#555e69}
+.r38-risk-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px}.r38-risk-card{border:1px solid #e2e7ed;border-radius:9px;padding:12px 10px 10px;min-height:132px}.r38-risk-top{display:flex;align-items:center;gap:7px}.r38-risk-icon{width:26px;height:26px;border-radius:7px;background:#f2f6ff;border:1px solid #dfe7fa;display:flex;align-items:center;justify-content:center;color:#345ec8;font-size:13px;font-weight:800}.r38-risk-name{font-size:10.5px;font-weight:750;color:#3d4550}.r38-risk-numrow{display:flex;align-items:center;justify-content:space-between;margin-top:14px}.r38-risk-score{font-size:21px;font-weight:850}.r38-mini-state{font-size:9px;font-weight:800;border-radius:999px;padding:3px 6px;background:#fff1f1;color:#d63e46}.r38-mini-state.mid{background:#fff7df;color:#c98300}.r38-mini-state.low{background:#edf8f3;color:#24855e}.r38-segments{display:flex;gap:3px;margin-top:13px}.r38-seg{height:4px;flex:1;border-radius:99px;background:#e8ebef}.r38-seg.on-red{background:#ea3944}.r38-seg.on-orange{background:#f0a018}.r38-seg.on-green{background:#3da77a}.r38-risk-foot,.r38-note{font-size:9px;color:#9299a2;margin-top:10px}
+.r38-market-table{border:1px solid #e1e6ed;border-radius:9px;overflow:hidden;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#fff}.r38-market-col{min-width:0;border-right:1px solid #e7ebf0}.r38-market-col:last-child{border-right:0}.r38-col-head{height:34px;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:800;background:#fafbfc;border-bottom:1px solid #e7ebf0}.r38-metric{min-height:76px;padding:9px 10px 7px;border-bottom:1px solid #edf0f3}.r38-metric:last-child{border-bottom:0}.r38-metric-name{font-size:9px;color:#555e69;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.r38-metric-row{display:flex;align-items:flex-end;justify-content:space-between;gap:7px;margin-top:3px}.r38-metric-value{font-size:14px;font-weight:820;white-space:nowrap}.r38-metric-delta{font-size:8.5px;margin-top:2px;font-weight:700;white-space:nowrap}.r38-spark{width:66px;height:27px;flex:0 0 66px}.r38-spark svg{width:100%;height:27px}.r38-recession{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.r38-recession-card{background:#f8fafc;border:1px solid #e7ebf0;border-radius:8px;padding:9px 10px}.r38-recession-name{font-size:9px;color:#808895}.r38-recession-value{font-size:15px;font-weight:820;margin-top:2px}
+div[data-testid="stButton"] button{border:1px solid #dfe4eb!important;background:#fff!important;color:#3e4651!important;border-radius:7px!important;font-size:11px!important;font-weight:700!important;min-height:34px!important;box-shadow:none!important}[data-testid="stExpander"]{border:1px solid #dde3eb!important;border-radius:10px!important;background:#fff!important}.r38-footer{font-size:9.5px;color:#9299a3;text-align:right;margin-top:12px}
+@media(max-width:1050px){.block-container{padding-left:176px!important;padding-right:18px!important}.r38-risk-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.r38-market-table{grid-template-columns:repeat(3,minmax(0,1fr))}.r38-market-col:nth-child(3){border-right:0}.r38-market-col:nth-child(n+4){border-top:1px solid #e7ebf0}}
+@media(max-width:780px){.r38-sidebar{display:none}.block-container{padding:calc(env(safe-area-inset-top,0px) + 18px) 12px 40px!important}.r38-mobilebar{display:flex;align-items:center;justify-content:space-between;background:#101b2d;color:#fff;margin:-18px -12px 15px;padding:12px 14px}.r38-mobile-brand{font-size:12px;font-weight:800}.r38-mobile-menu{font-size:19px}.r38-title{font-size:21px}.r38-subtitle{font-size:10.5px}.r38-head-actions{display:none}.r38-panel{padding:11px 10px}.r38-hero-grid{grid-template-columns:1fr}.r38-hero-card{min-height:214px}.r38-gauge{margin-left:auto}.r38-risk-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.r38-market-table{grid-template-columns:repeat(2,minmax(0,1fr))}.r38-market-col,.r38-market-col:nth-child(3){border-right:1px solid #e7ebf0}.r38-market-col:nth-child(even){border-right:0}.r38-market-col:nth-child(n+3){border-top:1px solid #e7ebf0}.r38-recession{gap:5px}.r38-metric{min-height:72px;padding:8px}.r38-spark{width:55px;flex-basis:55px}.r38-footer{text-align:left}}
+</style>""", unsafe_allow_html=True)
+# ---------- v3.38.0 redesigned frontend ----------
+import math
 
-_structure_detail=", ".join(x[0] for x in structure.get("items",[])) if structure.get("items") else "뚜렷한 구조적 위험 신호 없음"
-_structure_raw=structure.get("level","정상")
-_structure_state={"정상":("정상","normal"),"관찰":("관찰","watch"),"주의":("주의","caution"),"경계":("경고","alert")}.get(_structure_raw,(str(_structure_raw),"watch"))
-_structure_count=int(structure.get("count",0) or 0)
-_structure_count_html=f'<span class="overview-count">{_structure_count}개</span>' if _structure_count else ""
-_rapid_detail=", ".join(rapid.get("active",[])) if rapid.get("active") else "동시 급변 신호 없음"
-_rapid_raw=rapid.get("level","정상")
-_rapid_state={"정상":("정상","normal"),"관찰":("관찰","watch"),"급변 경보":("주의","caution"),"강한 스트레스":("경고","alert")}.get(_rapid_raw,(str(_rapid_raw),"watch"))
-_rapid_count=int(rapid.get("count",0) or 0)
-_rapid_count_html=f'<span class="overview-count">{_rapid_count}개</span>' if _rapid_count else ""
-_structure_detail_html=html.escape(_structure_detail)
-_rapid_detail_html=html.escape(_rapid_detail)
+def _esc(x): return html.escape(str(x))
 
-_shield='''<svg viewBox="0 0 24 24" fill="none" stroke="#4a5568" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8 19 5.6v5.2c0 4.6-2.7 8.2-7 10.4-4.3-2.2-7-5.8-7-10.4V5.6L12 2.8Z"/><path d="m8.2 13.2 2.2-2.2 1.8 1.7 3.6-4"/></svg>'''
-_warn='''<svg viewBox="0 0 24 24" fill="none" stroke="#c98b00" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 4.2 2.8 17.3a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>'''
-_bell='''<svg viewBox="0 0 24 24" fill="none" stroke="#2f7d5a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>'''
-st.markdown(
-    f'<div class="overview-grid">'
-    f'<div class="overview-card"><div class="overview-head"><span class="overview-head-icon">{_shield}</span>위험지수</div><div class="overview-horizon">중기 · 누적 시장 취약성</div><div class="overview-main"><span class="overview-score">{overall:.1f}</span><span class="overview-unit">/100</span></div><div class="overview-sub"><span class="risk-dot {risk_class(overall)}"></span>&nbsp; <b>{label(overall)}</b></div><div class="overview-delta">전일 대비 <span class="delta-{delta_class}">{delta_text}</span></div></div>'
-    f'<div class="overview-card"><div class="overview-head"><span class="overview-head-icon">{_warn}</span>구조적 위험 신호</div><div class="overview-horizon">수개월~1년 · 지속 취약성</div><div class="overview-status">{_structure_state[0]}{_structure_count_html}</div><div class="overview-signal-line"><span class="signal-status-dot {_structure_state[1]}"></span>{"활성 신호 있음" if _structure_count else "활성 신호 없음"}</div><div class="overview-sub">{_structure_detail_html}</div></div>'
-    f'<div class="overview-card"><div class="overview-head"><span class="overview-head-icon">{_bell}</span>시장 급변 신호</div><div class="overview-horizon">수일~수주 · 단기 시장 스트레스</div><div class="overview-status">{_rapid_state[0]}{_rapid_count_html}</div><div class="overview-signal-line"><span class="signal-status-dot {_rapid_state[1]}"></span>{"동시 급변 확인" if _rapid_count>=2 else ("급변 관찰 중" if _rapid_count else "동시 급변 없음")}</div><div class="overview-sub">{_rapid_detail_html}</div></div>'
-    f'</div>', unsafe_allow_html=True)
+def _gauge_svg(score, tone="#e53b46"):
+    sc=0.0 if pd.isna(score) else float(np.clip(score,0,100))
+    angle=180-(sc*1.8); rad=math.radians(angle); cx,cy=50,53
+    nx=cx+26*math.cos(rad); ny=cy-26*math.sin(rad)
+    return f'''<div class="r38-gauge"><svg viewBox="0 0 100 66" aria-hidden="true"><path d="M12 53 A38 38 0 0 1 88 53" pathLength="100" fill="none" stroke="#edf0f4" stroke-width="8" stroke-linecap="round"/><path d="M12 53 A38 38 0 0 1 88 53" pathLength="100" fill="none" stroke="{tone}" stroke-width="8" stroke-linecap="round" stroke-dasharray="{sc:.1f} 100"/><line x1="50" y1="53" x2="{nx:.1f}" y2="{ny:.1f}" stroke="#aab1bb" stroke-width="1.2"/><circle cx="50" cy="53" r="2.2" fill="#fff" stroke="#aab1bb" stroke-width="1"/><text x="10" y="64" class="r38-gauge-label">0</text><text x="84" y="64" class="r38-gauge-label">100</text></svg></div>'''
 
-comments=[]
-if pd.notna(base_overall) and overall>base_overall+0.05:
-    comments.append(f"기본 위험도 {base_overall:.1f}점에서 ‘{floor_diag.get('reason','신호 하한')}’을 반영해 최종 위험도를 {overall:.1f}점으로 조정했습니다.")
-if pd.notna(dev):
-    if dev>=15: comments.append("S&P500의 200일선 대비 과열 수준이 매우 높습니다.")
-    elif dev>=10: comments.append("S&P500의 200일선 대비 과열 부담이 높은 편입니다.")
-    elif dev<=0: comments.append("S&P500의 200일선 기준 가격 과열 부담은 낮은 상태입니다.")
-_cape_now=details.get("market",{}).get("cape",np.nan)
-if pd.notna(_cape_now) and details.get("market",{}).get("valuation",0)>=80: comments.append(f"CAPE가 {_cape_now:.1f}배로 역사적 고평가 구간에 있습니다.")
-if rapid.get("level") in ("급변 경보","강한 스트레스"): comments.append("서로 다른 빠른 지표가 동시에 악화돼 단기 시장 스트레스가 확인됩니다.")
-elif rapid.get("level")=="관찰": comments.append("한 개 이상의 빠른 지표가 급변해 추가 확인이 필요한 상태입니다.")
-if structure.get("count",0)>=2: comments.append("여러 구조적 취약성이 동시에 나타나 중기 하락 위험을 주의해서 볼 필요가 있습니다.")
-if not comments: comments.append("현재 구조적 취약성과 급변 신호가 동시에 강하게 나타나지는 않고 있습니다.")
-st.info("**현재 시장 해석**\n\n"+" ".join(comments))
+def _status_tone(score):
+    if pd.isna(score): return ('gray','#89919b')
+    if score>=61: return ('red','#e53b46')
+    if score>=41: return ('orange','#efa019')
+    return ('green','#2fa374')
 
-st.markdown('<div class="section"><h3>구성요소 위험도</h3></div>',unsafe_allow_html=True)
-labels={"시장·밸류에이션":"시장·밸류에이션 위험","변동성":"변동성 위험","금리":"금리 위험","신용":"신용시장 위험","경기":"경기 위험","물가":"물가 위험"}
-infos={
-    "시장·밸류에이션":"S&P500의 200일 이동평균 대비 과열 45%, CAPE 밸류에이션 35%, 최근 20거래일 상승 모멘텀 20%를 반영합니다. 폭락 이후 가격 하락 자체를 위험점수로 추가하지 않습니다.",
-    "변동성":"현재 VIX 절대 수준 55% + 최근 5거래일 급등 45%입니다. 급등은 상승률과 포인트 상승폭을 함께 봅니다.",
-    "금리":"10년물 수준 35% + 최근 20거래일 상승속도 25% + 10Y-2Y 15% + 10Y-EFFR 15% + 10년물 기간프리미엄 10%입니다.",
-    "신용":"하이일드 OAS 수준 45% + BBB OAS 수준 20% + 최근 5거래일 확대 15% + 최근 20거래일 확대 20%입니다.",
-    "경기":"실업률 수준 30% + Sahm Rule 35% + 신규 실업수당 35%입니다. Sahm Rule은 신규 실업수당의 최근 8주 상승 추세가 확인되지 않으면 강도를 제한합니다.",
-    "물가":"CPI 25% + 근원 CPI 35% + 근원 PCE 40%이며, 각 지표에서 전년동월비와 최근 3개월 연율화 흐름을 함께 반영합니다. 최근 흐름의 비중을 더 높였습니다."
-}
-risk_cards=[]
-for k in scores:
-    score_txt=f"{scores[k]:.1f}" if pd.notna(scores[k]) else "N/A"
-    tip=infos[k].replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
-    risk_cards.append(f'<div class="risk-card"><div class="risk-title">{labels[k]}<button class="info-icon" aria-label="{labels[k]} 설명" type="button"><span class="info-tip">{tip}</span></button></div><div class="risk-score">{score_txt} <span>/100</span></div><div class="risk-state"><span class="risk-dot {risk_class(scores[k])}"></span>{label(scores[k])}</div></div>')
-st.markdown('<div class="risk-grid">'+''.join(risk_cards)+'</div>',unsafe_allow_html=True)
+def _risk_badge(score):
+    c,_=_status_tone(score); return f'<span class="r38-badge {c}">{_esc(label(score))}</span>'
 
-st.markdown('<div class="section"><h3>핵심 시장 상태</h3></div>',unsafe_allow_html=True)
-fx=_read_fx().get("items",{})
+def _seg_html(score):
+    n=0 if pd.isna(score) else int(np.clip(math.ceil(float(score)/20),0,5))
+    c,_=_status_tone(score); on={'red':'on-red','orange':'on-orange','green':'on-green','gray':''}[c]
+    return '<div class="r38-segments">'+''.join(f'<span class="r38-seg {on if i<n else ""}"></span>' for i in range(5))+'</div>'
 
-def _fmt_fx(name,decimals=2):
-    item=fx.get(name,{})
-    v=item.get("value",np.nan); p=item.get("prev",np.nan)
-    if pd.isna(v): return "갱신 중…","최신 데이터 확인 중","flat"
-    delta=""; cls="flat"
-    if pd.notna(p) and p!=0:
-        ch=float(v-p); pct=ch/p*100
-        if ch>0:
-            cls="up"; delta=f"▲ {abs(ch):,.{decimals}f} (+{abs(pct):.2f}%)"
-        elif ch<0:
-            cls="down"; delta=f"▼ {abs(ch):,.{decimals}f} (-{abs(pct):.2f}%)"
-        else:
-            delta=f"— 0.{('0'*decimals)} (0.00%)"
-    return f"{v:,.{decimals}f}",delta,cls
-
-def _series_delta(s,unit="%",decimals=2):
-    cur=latest(s); prevv=second(s)
-    if pd.isna(cur): return "N/A","", "flat"
-    value=f"{cur:,.{decimals}f}{unit}"
-    if pd.isna(prevv): return value,"직전값 비교 불가","flat"
-    ch=float(cur-prevv)
-    if ch>0: return value,f"▲ {abs(ch):.{decimals}f}{unit}","up"
-    if ch<0: return value,f"▼ {abs(ch):.{decimals}f}{unit}","down"
-    return value,f"— {0:.{decimals}f}{unit}","flat"
-
-def _cpi_yoy_display(s):
-    yoy=s.pct_change(12)*100
-    cur=latest(yoy); prevv=second(yoy)
-    if pd.isna(cur): return "N/A","", "flat"
-    value=f"{cur:.2f}%"
-    if pd.isna(prevv): return value,"직전 발표 비교 불가","flat"
-    ch=float(cur-prevv)
-    if ch>0:return value,f"▲ {abs(ch):.2f}%p","up"
-    if ch<0:return value,f"▼ {abs(ch):.2f}%p","down"
-    return value,"— 0.00%p","flat"
-
-market_info={
-    "미국 기준금리":"미국의 실효 연방기금금리(EFFR)입니다. 연준의 통화정책과 단기 금융환경을 보여주는 대표 금리입니다.",
-    "미국 2년물 국채수익률":"미국 2년 만기 국채의 시장 수익률입니다. 향후 기준금리 기대에 민감하게 반응합니다.",
-    "미국 10년물 국채수익률":"미국 10년 만기 국채의 시장 수익률입니다. 장기금리와 금융환경을 판단하는 대표 지표입니다.",
-    "미국 30년물 국채수익률":"미국 30년 만기 국채의 시장 수익률입니다. 장기 성장·물가 기대와 장기 자금조달 여건을 반영합니다.",
-    "실업률":"미국 노동시장에서 실업자가 차지하는 비율입니다. 경기 둔화와 고용시장 변화를 판단하는 핵심 지표입니다.",
-    "원/달러":"미국 달러 1달러당 원화 가격입니다. 원화 가치와 달러 강세 정도를 참고하기 위한 지표입니다.",
-    "엔/달러":"미국 달러 1달러당 일본 엔화 가격입니다. 엔화 가치와 글로벌 달러 흐름을 참고하는 지표입니다.",
-    "달러인덱스":"주요 통화 대비 미국 달러의 상대적 강도를 나타내는 달러인덱스(DXY)입니다.",
-    "하이일드 스프레드":"미국 투기등급 회사채가 국채보다 추가로 요구하는 금리입니다. 커질수록 신용시장 스트레스가 높다는 의미입니다.",
-    "CPI":"미국 소비자물가지수의 전년 대비 상승률입니다. 소비자가 체감하는 전반적인 물가 압력을 보여줍니다.",
-    "WTI 유가":"서부텍사스산원유(WTI) 선물의 현재 가격입니다. 에너지 비용과 물가 압력, 경기 기대를 참고하는 시장 지표이며 종합위험지수 산식에는 포함하지 않습니다."
-}
-
-def _spark_svg(values):
+def _spark_svg_38(values):
     vals=[float(x) for x in values if pd.notna(x)]
-    if len(vals)<2:return '<div class="spark-wrap"></div>'
-    vals=vals[-60:]; lo=min(vals); hi=max(vals); span=(hi-lo) or 1.0
-    pts=[]
+    if len(vals)<2:return '<div class="r38-spark"></div>'
+    vals=vals[-60:]; lo=min(vals); hi=max(vals); span=(hi-lo) or 1.0; pts=[]
     for i,v in enumerate(vals):
-        x=2+(96*i/(len(vals)-1)); y=30-(26*(v-lo)/span)
-        pts.append(f"{x:.1f},{y:.1f}")
-    return '<div class="spark-wrap"><svg viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true"><line class="spark-base" x1="0" y1="31" x2="100" y2="31"/><polyline class="spark-line" points="'+" ".join(pts)+'"/></svg></div>'
+        x=2+62*i/(len(vals)-1); y=25-22*(v-lo)/span; pts.append(f'{x:.1f},{y:.1f}')
+    color='#e53b46' if vals[-1]>=vals[0] else '#2f70c9'
+    pts_str=' '.join(pts)
+    return f'<div class="r38-spark"><svg viewBox="0 0 66 28" preserveAspectRatio="none"><polyline points="{pts_str}" fill="none" stroke="{color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>'
 
-market_items=[]
-for name,series,unit,dec in [
-    ("미국 기준금리",fed,"%",2),
-    ("미국 2년물 국채수익률",y2,"%",2),
-    ("미국 10년물 국채수익률",y10,"%",2),
-    ("미국 30년물 국채수익률",y30,"%",2),
-    ("실업률",unemp,"%",1),
-]:
-    v,dlt,cls=_series_delta(series,unit,dec)
-    market_items.append((name,v,dlt,cls,list(series.dropna().tail(36).values)))
+def _fmt_series_metric(s, unit='%', decimals=2):
+    cur=latest(s); prv=second(s)
+    if pd.isna(cur): return 'N/A','', 'flat'
+    val=f'{cur:,.{decimals}f}{unit}'
+    if pd.isna(prv): return val,'직전값 없음','flat'
+    ch=float(cur-prv)
+    if ch>0:return val,f'▲ {abs(ch):.{decimals}f}{unit}','up'
+    if ch<0:return val,f'▼ {abs(ch):.{decimals}f}{unit}','down'
+    return val,f'— {0:.{decimals}f}{unit}','flat'
 
-for name in ("원/달러","엔/달러","달러인덱스"):
-    v,dlt,cls=_fmt_fx(name,2)
-    market_items.append((name,v,dlt,cls,fx.get(name,{}).get("spark",[])))
+def _fmt_fx_metric(name,decimals=2):
+    item=fx.get(name,{})
+    v=item.get('value',np.nan); p=item.get('prev',np.nan)
+    if pd.isna(v): return 'N/A','', 'flat'
+    val=f'{v:,.{decimals}f}'
+    if pd.isna(p) or p==0:return val,'직전값 없음','flat'
+    ch=float(v-p); pct=ch/p*100
+    if ch>0:return val,f'▲ {abs(ch):,.{decimals}f} (+{abs(pct):.2f}%)','up'
+    if ch<0:return val,f'▼ {abs(ch):,.{decimals}f} (-{abs(pct):.2f}%)','down'
+    return val,f'— 0.{"0"*decimals} (0.00%)','flat'
 
-v,dlt,cls=_fmt_fx("WTI 유가",2)
-if v not in ("갱신 중…","N/A"):
-    v=f"${v}"
-market_items.append(("WTI 유가",v,dlt,cls,fx.get("WTI 유가",{}).get("spark",[])))
+def _cpi_metric(s):
+    yoy=s.pct_change(12)*100; cur=latest(yoy); prv=second(yoy)
+    if pd.isna(cur):return 'N/A','', 'flat'
+    val=f'{cur:.2f}%'
+    if pd.isna(prv):return val,'직전 발표 없음','flat'
+    ch=float(cur-prv)
+    if ch>0:return val,f'▲ {abs(ch):.2f}%p','up'
+    if ch<0:return val,f'▼ {abs(ch):.2f}%p','down'
+    return val,'— 0.00%p','flat'
 
-v,dlt,cls=_series_delta(hy,"%p",2)
-market_items.append(("하이일드 스프레드",v,dlt,cls,list(hy.dropna().tail(36).values)))
-v,dlt,cls=_cpi_yoy_display(cpi)
-market_items.append(("CPI",v,dlt,cls,list((cpi.pct_change(12)*100).dropna().tail(18).values)))
+def _metric_html(name,value,delta,cls,spark):
+    return f'''<div class="r38-metric"><div class="r38-metric-name">{_esc(name)}</div><div class="r38-metric-row"><div><div class="r38-metric-value">{_esc(value)}</div><div class="r38-metric-delta r38-{cls}">{_esc(delta)}</div></div>{_spark_svg_38(spark)}</div></div>'''
 
-market_cards=[]
-for n,v,dlt,cls,spark in market_items:
-    tip=market_info.get(n,"현재값과 직전값을 비교해 시장 상태를 참고하는 지표입니다.").replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
-    market_cards.append(
-        f'<div class="market-card"><div class="market-name">{n}'
-        f'<button class="info-icon" aria-label="{n} 설명" type="button"><span class="info-tip">{tip}</span></button>'
-        f'</div><div class="market-value">{v}</div><div class="market-delta delta-{cls}">{dlt}</div>{_spark_svg(spark)}</div>'
-    )
-st.markdown('<div class="market-grid">'+''.join(market_cards)+'</div>',unsafe_allow_html=True)
-st.caption("ⓘ 데스크톱에서는 마우스를 올리고, 모바일에서는 터치하면 지표 설명을 볼 수 있습니다. 환율·달러인덱스·WTI 유가는 참고자료이며 위험지수 산식에는 포함하지 않습니다.")
+fed,y2,y10,y30=data['기준금리'],data['2년물'],data['10년물'],data['30년물']
+term_premium=data.get('10년물기간프리미엄',pd.Series(dtype=float)); hy,bbb=data['하이일드스프레드'],data['BBB스프레드']
+cpi,core_cpi,core_pce=data['CPI'],data['근원CPI'],data['근원PCE']; unemp,icsa,sp,vix=data['실업률'],data['신규실업수당'],data['S&P500'],data['VIX']
+cape=_read_cape(); spread210=(y10-y2).dropna(); spread10fed=(y10-fed).dropna()
+snapshot=compute_snapshot(data,cape); scores=snapshot['scores']; details=snapshot['details']; structure=snapshot['structure']
+base_overall=snapshot['overall']; dev=details['market'].get('dev',np.nan); sahm_now=details['economy'].get('sahm_value',np.nan)
+zsp=sp.dropna(); prev_date=zsp.index[-2] if len(zsp)>=2 else None
+if prev_date is not None:
+    prev_data={k:v.loc[:prev_date].dropna() for k,v in data.items()}; prev_cape=cape.loc[:prev_date].dropna() if len(cape) else cape
+    prev_snapshot=compute_snapshot(prev_data,prev_cape,with_alerts=False); prev_fast=fast_signal_scores(prev_snapshot['details'])
+else:
+    prev_data={}; prev_snapshot=None; prev_fast={}
+current_fast=fast_signal_scores(details); rapid=rapid_alert(current_fast,prev_fast)
+overall,floor_diag=apply_risk_floors(base_overall,structure,rapid,sp,vix,current_fast.get('신용',np.nan))
+if prev_snapshot is not None:
+    prev_structure=structural_signals(prev_snapshot['details'],(prev_data['10년물']-prev_data['2년물']).dropna()); prev_rapid=rapid_alert(prev_fast,{})
+    prev_overall,_=apply_risk_floors(prev_snapshot['overall'],prev_structure,prev_rapid,prev_data['S&P500'],prev_data['VIX'],prev_fast.get('신용',np.nan))
+else: prev_overall=np.nan
+_,delta_text,delta_class=delta_value(overall,prev_overall)
+
+now_kst=datetime.now(ZoneInfo('Asia/Seoul'))
+sidebar='''<aside class="r38-sidebar"><div class="r38-brand"><span class="r38-brand-mark"><svg viewBox="0 0 32 38" fill="none"><path d="M16 2.5 27 7v8.4c0 8.1-4.4 14.4-11 18.1C9.4 29.8 5 23.5 5 15.4V7L16 2.5Z" stroke="#E7EDF7" stroke-width="1.5"/><path d="m11 18 3 3 7-8" stroke="#E7EDF7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Market Risk<br>Monitor</span></div><nav class="r38-nav"><div class="r38-nav-item active"><span class="r38-nav-icon">⌂</span>대시보드</div><div class="r38-nav-item"><span class="r38-nav-icon">◉</span>위험지수</div><div class="r38-nav-item"><span class="r38-nav-icon">≋</span>시장 상태</div><div class="r38-nav-item"><span class="r38-nav-icon">▣</span>데이터</div><div class="r38-nav-item"><span class="r38-nav-icon">♢</span>알림</div><div class="r38-nav-item"><span class="r38-nav-icon">▤</span>리포트</div><div class="r38-nav-item"><span class="r38-nav-icon">⚙</span>설정</div><div class="r38-nav-item"><span class="r38-nav-icon">?</span>도움말</div></nav><div class="r38-side-bottom"><div class="r38-side-title">최종 업데이트</div><div>'''+now_kst.strftime('%Y.%m.%d %H:%M')+'''</div><div>(한국시간 기준)</div><div class="r38-toggle">다크 모드 <span class="r38-toggle-pill"></span></div></div></aside><div class="r38-mobilebar"><div class="r38-mobile-brand">Market Risk Monitor</div><div class="r38-mobile-menu">☰</div></div>'''
+st.markdown(sidebar,unsafe_allow_html=True)
+st.markdown(f'''<div class="r38-head"><div><div class="r38-title">대시보드</div><div class="r38-subtitle">현재 시장 상황과 위험 요인을 한눈에 파악하세요.</div><div class="r38-credit">Developed by 유유상 · v3.38.0</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><div class="r38-action">↻　데이터 업데이트</div></div></div>''',unsafe_allow_html=True)
+refresh_indicator()
+
+_structure_count=int(structure.get('count',0) or 0); _structure_raw=structure.get('level','정상')
+_rapid_count=int(rapid.get('count',0) or 0); _rapid_raw=rapid.get('level','정상')
+struct_score=50 if _structure_count>=2 else (40 if _structure_count==1 else 0); rapid_score=65 if _rapid_count>=3 else (55 if _rapid_count==2 else 0)
+struct_tone='#e53b46' if _structure_count>=3 else ('#ef9d17' if _structure_count else '#2fa374'); rapid_tone='#e53b46' if _rapid_count>=2 else ('#ef9d17' if _rapid_count else '#2fa374')
+struct_label={'정상':'정상','관찰':'관찰','주의':'주의','경계':'경고'}.get(_structure_raw,_structure_raw); rapid_label={'정상':'정상','관찰':'관찰','급변 경보':'경고','강한 스트레스':'경고'}.get(_rapid_raw,_rapid_raw)
+struct_chips=''.join(f'<span class="r38-chip warn">{_esc(x[0])}</span>' for x in structure.get('items',[])) or '<span class="r38-chip warn">활성 신호 없음</span>'
+rapid_chips=''.join(f'<span class="r38-chip">{_esc(x)}</span>' for x in rapid.get('active',[])) or '<span class="r38-chip">동시 급변 없음</span>'
+comments=[]
+if pd.notna(base_overall) and overall>base_overall+0.05: comments.append(f'기본 위험도 {base_overall:.1f} → 최종 {overall:.1f}: {floor_diag.get("reason","신호 하한")} 반영')
+if rapid.get('level') in ('급변 경보','강한 스트레스'): comments.append('서로 다른 빠른 지표가 동시에 악화되어 단기 시장 스트레스가 확인됩니다.')
+elif structure.get('count',0)>=2: comments.append('여러 구조적 취약성이 겹쳐 중기 위험을 주의해서 볼 구간입니다.')
+elif pd.notna(dev) and dev>=10: comments.append('S&P500의 200일선 대비 과열 부담이 높은 편입니다.')
+else: comments.append('현재 구조적 취약성과 급변 신호가 동시에 강하게 나타나지는 않고 있습니다.')
+hero_tone='#e53b46' if overall>=61 else ('#ef9d17' if overall>=41 else '#2fa374')
+level1=f'''<section class="r38-panel"><div class="r38-section-title">LEVEL 1. 한눈에 보는 시장 위험 <span class="r38-info">i</span></div><div class="r38-hero-grid"><div class="r38-hero-card danger"><div class="r38-card-title">위험지수 (종합) <span class="r38-info">i</span></div><div class="r38-horizon">중기 · 누적 시장 취약성</div><div class="r38-hero-main"><div><div><span class="r38-big {'red' if overall>=61 else ('orange' if overall>=41 else '')}">{overall:.1f}</span><span class="r38-unit">/ 100</span></div>{_risk_badge(overall)}<div class="r38-delta-label">전일 대비</div><div class="r38-delta r38-{delta_class}">{_esc(delta_text)}</div></div>{_gauge_svg(overall,hero_tone)}</div><div class="r38-callout"><b>시장 스트레스:</b> {_esc(floor_diag.get('reason','기본 위험도 기준'))}<br>기본 위험지수 {base_overall:.1f}</div></div><div class="r38-hero-card warn"><div class="r38-card-title">구조적 위험 <span class="r38-info">i</span></div><div class="r38-horizon">수개월~1년 · 지속 취약성</div><div class="r38-hero-main"><div><div><span class="r38-big {'orange' if _structure_count else ''}">{struct_score:.1f}</span><span class="r38-unit">/ 100</span></div><span class="r38-badge {'orange' if _structure_count else 'green'}">{_esc(struct_label)}</span><div class="r38-delta-label">위험지수 하한 · 감지 신호</div><div class="r38-delta r38-flat">{struct_score:.0f}점 · {_structure_count}개</div></div>{_gauge_svg(struct_score,struct_tone)}</div><div class="r38-callout warn"><b>감지된 신호 ({_structure_count}개)</b><div class="r38-chips">{struct_chips}</div></div></div><div class="r38-hero-card danger"><div class="r38-card-title">시장 급변 신호 <span class="r38-info">i</span></div><div class="r38-horizon">수일~수주 · 단기 시장 스트레스</div><div class="r38-hero-main"><div><div><span class="r38-big {'red' if _rapid_count>=2 else ('orange' if _rapid_count else '')}">{rapid_score:.1f}</span><span class="r38-unit">/ 100</span></div><span class="r38-badge {'red' if _rapid_count>=2 else ('orange' if _rapid_count else 'green')}">{_esc(rapid_label)}</span><div class="r38-delta-label">위험지수 하한 · 동시 급변 축</div><div class="r38-delta r38-flat">{rapid_score:.0f}점 · {_rapid_count}개</div></div>{_gauge_svg(rapid_score,rapid_tone)}</div><div class="r38-callout"><b>감지된 신호 ({_rapid_count}개)</b><div class="r38-chips">{rapid_chips}</div></div></div></div><div class="r38-interpret">{' '.join(_esc(x) for x in comments)}</div></section>'''
+st.markdown(level1,unsafe_allow_html=True)
+
+label_map={'시장·밸류에이션':'주식 시장','변동성':'변동성','금리':'금리','신용':'신용 시장','경기':'경기','물가':'물가'}; icon_map={'시장·밸류에이션':'▧','변동성':'↕','금리':'%','신용':'▤','경기':'▥','물가':'◉'}
+risk_cards=[]
+for k in ['시장·밸류에이션','변동성','금리','신용','경기','물가']:
+    sc=scores.get(k,np.nan); state_class='low' if pd.notna(sc) and sc<41 else ('mid' if pd.notna(sc) and sc<61 else '')
+    score_txt=f'{sc:.1f}' if pd.notna(sc) else 'N/A'
+    risk_cards.append(f'''<div class="r38-risk-card"><div class="r38-risk-top"><div class="r38-risk-icon">{icon_map[k]}</div><div class="r38-risk-name">{label_map[k]}</div></div><div class="r38-risk-numrow"><div class="r38-risk-score">{score_txt}</div><span class="r38-mini-state {state_class}">{_esc(label(sc))}</span></div>{_seg_html(sc)}<div class="r38-risk-foot">0~100 · 높을수록 위험</div></div>''')
+st.markdown('<section class="r38-panel"><div class="r38-section-title">LEVEL 2. 6대 위험 카테고리 현황 <span class="r38-info">i</span></div><div class="r38-risk-grid">'+''.join(risk_cards)+'</div><div class="r38-note">* 각 카테고리는 0~100 점수로 평가되며, 높을수록 위험이 큽니다.</div></section>',unsafe_allow_html=True)
+
+fx=_read_fx().get('items',{})
+spv,spd,spc=_fmt_series_metric(sp,'',2); effv,effd,effc=_fmt_series_metric(fed,'%',2); y2v,y2d,y2c=_fmt_series_metric(y2,'%',2); y10v,y10d,y10c=_fmt_series_metric(y10,'%',2); y30v,y30d,y30c=_fmt_series_metric(y30,'%',2)
+hyv,hyd,hyc=_fmt_series_metric(hy,'%p',2); cpiv,cpid,cpic=_cpi_metric(cpi); unv,und,unc=_fmt_series_metric(unemp,'%',1)
+dxyv,dxyd,dxyc=_fmt_fx_metric('달러인덱스',2); krwv,krwd,krwc=_fmt_fx_metric('원/달러',2); jpyv,jpyd,jpyc=_fmt_fx_metric('엔/달러',2); wtiv,wtid,wtic=_fmt_fx_metric('WTI 유가',2); wtiv='$'+wtiv if wtiv!='N/A' else wtiv
+cols=[('주식 / 정책',[('S&P 500',spv,spd,spc,list(sp.dropna().tail(60).values)),('미국 기준금리',effv,effd,effc,list(fed.dropna().tail(36).values))]),('국채 금리',[('미국 2Y',y2v,y2d,y2c,list(y2.dropna().tail(60).values)),('미국 10Y',y10v,y10d,y10c,list(y10.dropna().tail(60).values)),('미국 30Y',y30v,y30d,y30c,list(y30.dropna().tail(60).values))]),('신용 / 물가',[('하이일드 스프레드',hyv,hyd,hyc,list(hy.dropna().tail(60).values)),('CPI',cpiv,cpid,cpic,list((cpi.pct_change(12)*100).dropna().tail(18).values))]),('경기 / 달러',[('실업률',unv,und,unc,list(unemp.dropna().tail(18).values)),('달러 인덱스',dxyv,dxyd,dxyc,fx.get('달러인덱스',{}).get('spark',[]))]),('환율 / 원자재',[('원/달러',krwv,krwd,krwc,fx.get('원/달러',{}).get('spark',[])),('엔/달러',jpyv,jpyd,jpyc,fx.get('엔/달러',{}).get('spark',[])),('WTI 유가',wtiv,wtid,wtic,fx.get('WTI 유가',{}).get('spark',[]))])]
+market_html=[]
+for head,items in cols: market_html.append('<div class="r38-market-col"><div class="r38-col-head">'+_esc(head)+'</div>'+''.join(_metric_html(*x) for x in items)+'</div>')
+_claims_confirm=bool(details.get('economy',{}).get('claims_confirm',False))
+if pd.notna(sahm_now) and sahm_now>=.5 and _claims_confirm: rec_status='확인'
+elif pd.notna(sahm_now) and sahm_now>=.5: rec_status='관찰'
+else: rec_status='정상'
+sahm_text=f'{sahm_now:.2f}%p' if pd.notna(sahm_now) else 'N/A'; unemp_text=f'{latest(unemp):.1f}%' if pd.notna(latest(unemp)) else 'N/A'
+rec_html=f'''<div class="r38-recession"><div class="r38-recession-card"><div class="r38-recession-name">실업률</div><div class="r38-recession-value">{unemp_text}</div></div><div class="r38-recession-card"><div class="r38-recession-name">Sahm Rule</div><div class="r38-recession-value">{sahm_text}</div></div><div class="r38-recession-card"><div class="r38-recession-name">경기침체 신호</div><div class="r38-recession-value">{rec_status}</div></div></div>'''
+st.markdown('<section class="r38-panel"><div class="r38-section-title">LEVEL 3. 핵심 시장 상태 <span class="r38-info">i</span></div><div class="r38-market-table">'+''.join(market_html)+'</div>'+rec_html+'<div class="r38-note">환율·달러인덱스·WTI 유가는 참고자료이며 종합위험지수 산식에는 포함하지 않습니다.</div></section>',unsafe_allow_html=True)
 
 @st.cache_data(ttl=3600,show_spinner=False)
-def historical_risk_fast(data,cape):
-    months=pd.date_range(pd.Timestamp.now().normalize()-pd.DateOffset(months=12),pd.Timestamp.now().normalize(),freq="MS")
-    rows=[]
+def historical_risk_fast_338(data,cape):
+    months=pd.date_range(pd.Timestamp.now().normalize()-pd.DateOffset(months=12),pd.Timestamp.now().normalize(),freq='MS'); rows=[]; prior_fast={}
     for dt in months:
         sub={k:v.loc[:dt].dropna() for k,v in data.items()}
-        if len(sub.get("S&P500",pd.Series(dtype=float)))<220 or len(sub.get("VIX",pd.Series(dtype=float)))<30 or len(sub.get("10년물",pd.Series(dtype=float)))<30: continue
-        sub_cape=cape.loc[:dt].dropna() if len(cape) else cape
-        snap=compute_snapshot(sub,sub_cape,with_alerts=False)
-        rows.append((dt,snap["overall"]))
-    return pd.DataFrame(rows,columns=["date","risk"]).set_index("date") if rows else pd.DataFrame(columns=["risk"])
+        if len(sub.get('S&P500',pd.Series(dtype=float)))<220 or len(sub.get('VIX',pd.Series(dtype=float)))<30 or len(sub.get('10년물',pd.Series(dtype=float)))<30: continue
+        sub_cape=cape.loc[:dt].dropna() if len(cape) else cape; snap=compute_snapshot(sub,sub_cape,with_alerts=False); fast=fast_signal_scores(snap['details']); rap=rapid_alert(fast,prior_fast)
+        struct=structural_signals(snap['details'],(sub['10년물']-sub['2년물']).dropna()); final,_=apply_risk_floors(snap['overall'],struct,rap,sub['S&P500'],sub['VIX'],fast.get('신용',np.nan)); rows.append((dt,snap['overall'],final)); prior_fast=fast
+    return pd.DataFrame(rows,columns=['date','base','risk']).set_index('date') if rows else pd.DataFrame(columns=['base','risk'])
 
-def render_history_chart(hist):
-    # 기본 차트 대신 가벼운 SVG를 사용해 한국식 표기와 모바일 터치 종료 시 툴팁 숨김을 보장합니다.
+def render_history_chart_338(hist):
     rows=[]
-    for dt,val in hist["risk"].dropna().items():
-        dt=pd.Timestamp(dt)
-        rows.append({"date":f"{dt.year}년 {dt.month}월 {dt.day}일","year":int(dt.year),"month":int(dt.month),"risk":round(float(val),1)})
+    for dt,row in hist.dropna(how='all').iterrows():
+        dt=pd.Timestamp(dt); rows.append({'date':f'{dt.year}년 {dt.month}월 {dt.day}일','year':int(dt.year),'month':int(dt.month),'risk':round(float(row['risk']),1),'base':round(float(row['base']),1)})
     payload=json.dumps(rows,ensure_ascii=False)
-    chart_html='''<div id="riskChartWrap" style="width:100%;height:320px;position:relative;font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR','Segoe UI',sans-serif;touch-action:pan-y;">
-<svg id="riskChart" width="100%" height="320" style="overflow:visible"></svg>
-<div id="riskTip" style="display:none;position:absolute;pointer-events:none;background:#fff;border:1px solid #dfe2e7;border-radius:10px;padding:8px 10px;box-shadow:0 8px 24px rgba(0,0,0,.13);font-size:12px;line-height:1.55;color:#30343b;white-space:nowrap;z-index:5"></div></div>
-<script>(()=>{
-const data=__PAYLOAD__,svg=document.getElementById('riskChart'),wrap=document.getElementById('riskChartWrap'),tip=document.getElementById('riskTip');if(!data.length)return;
-const NS='http://www.w3.org/2000/svg',W=Math.max(320,wrap.clientWidth),H=320,L=52,R=14,T=18,B=46,PW=W-L-R,PH=H-T-B;svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
-const vals=data.map(d=>d.risk),rawMin=Math.min(...vals),rawMax=Math.max(...vals),ymin=Math.max(0,Math.floor((rawMin-5)/10)*10),ymax=Math.min(100,Math.ceil((rawMax+5)/10)*10||ymin+10);
-const x=i=>L+(data.length===1?PW/2:i*PW/(data.length-1)),y=v=>T+(ymax-v)*PH/(ymax-ymin||1),el=(n,a={})=>{const q=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>q.setAttribute(k,v));return q};
-for(let j=0;j<=4;j++){const v=ymin+(ymax-ymin)*j/4,yy=y(v);svg.appendChild(el('line',{x1:L,y1:yy,x2:W-R,y2:yy,stroke:'#eceef1','stroke-width':'1'}));const t=el('text',{x:L-10,y:yy+4,'text-anchor':'end',fill:'#7a8089','font-size':'12'});t.textContent=v.toFixed(1);svg.appendChild(t)}
-const yt=el('text',{x:13,y:T+PH/2,'text-anchor':'middle',fill:'#7a8089','font-size':'11',transform:`rotate(-90 13 ${T+PH/2})`});yt.textContent='위험지수';svg.appendChild(yt);
-const ticks=[],step=W<500?3:2;data.forEach((d,i)=>{if(i===0||i===data.length-1||d.month===1||i%step===0)ticks.push(i)});[...new Set(ticks)].forEach(i=>{const d=data[i],t=el('text',{x:x(i),y:H-14,'text-anchor':'middle',fill:'#7a8089','font-size':W<500?'11':'12'});t.textContent=(i===0)?`${String(d.year).slice(-2)}년 ${d.month}월`:(d.month===1?`${String(d.year).slice(-2)}년`:`${d.month}월`);svg.appendChild(t)});
-svg.appendChild(el('polyline',{points:data.map((d,i)=>`${x(i)},${y(d.risk)}`).join(' '),fill:'none',stroke:'#5a67d8','stroke-width':'2.5','stroke-linejoin':'round','stroke-linecap':'round','vector-effect':'non-scaling-stroke'}));data.forEach((d,i)=>svg.appendChild(el('circle',{cx:x(i),cy:y(d.risk),r:'3.2',fill:'#fff',stroke:'#5a67d8','stroke-width':'2','vector-effect':'non-scaling-stroke'})));
-const show=clientX=>{const rect=wrap.getBoundingClientRect(),px=Math.max(0,Math.min(rect.width,clientX-rect.left)),idx=Math.max(0,Math.min(data.length-1,Math.round(px/rect.width*(data.length-1)))),d=data[idx];tip.innerHTML=`<b>날짜</b> ${d.date}<br><b>위험지수</b> ${d.risk.toFixed(1)}`;tip.style.display='block';requestAnimationFrame(()=>{let left=px+12;if(left+tip.offsetWidth>rect.width)left=px-tip.offsetWidth-12;tip.style.left=Math.max(4,left)+'px';tip.style.top=Math.max(6,(y(d.risk)/H*rect.height)-tip.offsetHeight-10)+'px'})},hide=()=>tip.style.display='none';
-wrap.addEventListener('mousemove',e=>show(e.clientX));wrap.addEventListener('mouseleave',hide);wrap.addEventListener('touchstart',e=>{if(e.touches[0])show(e.touches[0].clientX)},{passive:true});wrap.addEventListener('touchmove',e=>{if(e.touches[0])show(e.touches[0].clientX)},{passive:true});wrap.addEventListener('touchend',hide,{passive:true});wrap.addEventListener('touchcancel',hide,{passive:true});document.addEventListener('touchstart',e=>{if(!wrap.contains(e.target))hide()},{passive:true});
-})();</script>'''
-    chart_html=chart_html.replace("__PAYLOAD__",payload)
-    components.html(chart_html,height=330,scrolling=False)
+    chart_html='''<div id="r38ChartWrap" style="width:100%;height:300px;position:relative;font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR','Segoe UI',sans-serif;touch-action:pan-y;background:#fff"><svg id="r38Chart" width="100%" height="300"></svg><div id="r38Tip" style="display:none;position:absolute;pointer-events:none;background:#101827;color:#fff;border-radius:7px;padding:8px 10px;font-size:11px;line-height:1.55;white-space:nowrap;z-index:5"></div></div><script>(()=>{const data=__PAYLOAD__,svg=document.getElementById('r38Chart'),wrap=document.getElementById('r38ChartWrap'),tip=document.getElementById('r38Tip');if(!data.length)return;const NS='http://www.w3.org/2000/svg',W=Math.max(320,wrap.clientWidth),H=300,L=38,R=12,T=24,B=35,PW=W-L-R,PH=H-T-B;svg.setAttribute('viewBox',`0 0 ${W} ${H}`);const x=i=>L+(data.length===1?PW/2:i*PW/(data.length-1)),y=v=>T+(100-v)*PH/100,el=(n,a={})=>{const q=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>q.setAttribute(k,v));return q};[[70,100,'#fff1f1'],[40,70,'#fff8e8'],[0,40,'#f1f8f4']].forEach(([a,b,c])=>svg.appendChild(el('rect',{x:L,y:y(b),width:PW,height:y(a)-y(b),fill:c})));[0,25,50,75,100].forEach(v=>{const yy=y(v);svg.appendChild(el('line',{x1:L,y1:yy,x2:W-R,y2:yy,stroke:'#e7ebef','stroke-width':'1'}));const t=el('text',{x:L-7,y:yy+4,'text-anchor':'end',fill:'#818995','font-size':'10'});t.textContent=v;svg.appendChild(t)});data.forEach((d,i)=>{if(i===0||i===data.length-1||i%2===0){const t=el('text',{x:x(i),y:H-11,'text-anchor':'middle',fill:'#818995','font-size':'10'});t.textContent=i===0?`${String(d.year).slice(-2)}년 ${d.month}월`:(d.month===1?`${String(d.year).slice(-2)}년`:`${d.month}월`);svg.appendChild(t)}});svg.appendChild(el('polyline',{points:data.map((d,i)=>`${x(i)},${y(d.base)}`).join(' '),fill:'none',stroke:'#4169c7','stroke-width':'1.6','stroke-dasharray':'5 4'}));svg.appendChild(el('polyline',{points:data.map((d,i)=>`${x(i)},${y(d.risk)}`).join(' '),fill:'none',stroke:'#e23a43','stroke-width':'2.1','stroke-linejoin':'round','stroke-linecap':'round'}));const leg1=el('text',{x:L,y:12,fill:'#e23a43','font-size':'10'});leg1.textContent='━ 최종 위험지수';svg.appendChild(leg1);const leg2=el('text',{x:L+92,y:12,fill:'#4169c7','font-size':'10'});leg2.textContent='┄ 기본 위험지수';svg.appendChild(leg2);const show=clientX=>{const rect=wrap.getBoundingClientRect(),px=Math.max(0,Math.min(rect.width,clientX-rect.left)),idx=Math.max(0,Math.min(data.length-1,Math.round(px/rect.width*(data.length-1)))),d=data[idx];tip.innerHTML=`<b>${d.date}</b><br><span style="color:#ff5961">●</span> 최종 위험지수　<b>${d.risk.toFixed(1)}</b><br><span style="color:#6790e8">●</span> 기본 위험지수　${d.base.toFixed(1)}`;tip.style.display='block';tip.style.left=Math.max(4,Math.min(px+10,rect.width-175))+'px';tip.style.top='45px'},hide=()=>tip.style.display='none';wrap.addEventListener('mousemove',e=>show(e.clientX));wrap.addEventListener('mouseleave',hide);wrap.addEventListener('touchstart',e=>{if(e.touches[0])show(e.touches[0].clientX)},{passive:true});wrap.addEventListener('touchend',hide,{passive:true});})();</script>'''.replace('__PAYLOAD__',payload)
+    components.html(chart_html,height=305,scrolling=False)
 
-st.markdown('<div class="section"><h3>종합위험지수 추이</h3></div>',unsafe_allow_html=True)
-if "show_history" not in st.session_state: st.session_state.show_history=False
-if st.button("최근 1년 추이 불러오기",type="secondary"):
-    st.session_state.show_history=True
-if st.session_state.show_history:
-    with st.spinner("추이 계산 중…"): hist=historical_risk_fast(data,cape)
-    if len(hist):
-        render_history_chart(hist)
-        st.caption("최근 1년 월별 스냅샷 · 최초 계산 후 서버 공용 캐시를 최대 1시간 재사용")
-    else: st.warning("과거 위험지수를 계산할 데이터가 부족합니다.")
-else: st.caption("초기 로딩 속도를 위해 과거 추이 계산은 필요할 때만 실행합니다.")
-
-st.markdown('<div class="section"><h3>경기침체 신호</h3></div>',unsafe_allow_html=True)
-_claims_confirm=bool(details.get("economy",{}).get("claims_confirm",False))
-if pd.notna(sahm_now) and sahm_now>=.5 and _claims_confirm: _recession_status="확인"
-elif pd.notna(sahm_now) and sahm_now>=.5: _recession_status="관찰"
-else: _recession_status="정상"
-# 명확한 3개 카드 구성
-_sahm_text=f"{sahm_now:.2f}%p" if pd.notna(sahm_now) else "N/A"
-_recession_html=(f'<div class="recession-grid">'
-                 f'<div class="recession-card"><div class="recession-name">실업률</div><div class="recession-value">{latest(unemp):.1f}%</div></div>'
-                 f'<div class="recession-card"><div class="recession-name">Sahm Rule</div><div class="recession-value">{_sahm_text}</div></div>'
-                 f'<div class="recession-card"><div class="recession-name">침체 신호</div><div class="recession-value">{_recession_status}</div></div>'
-                 '</div>')
-st.markdown(_recession_html,unsafe_allow_html=True)
-
-with st.expander("세부 데이터 및 계산 기준"):
-    st.write("종합위험지수: 시장·밸류에이션 25% + 금리 25% + 신용 15% + 경기 17% + 변동성 10% + 물가 8%.")
-    st.write("시장·밸류에이션: 200일선 과열 45% + CAPE 35% + 최근 20거래일 상승 모멘텀 20%. 폭락 자체는 추가 위험으로 가산하지 않습니다.")
-    st.write("변동성: 현재 VIX 절대수준 55% + 최근 5거래일 급등 45%.")
-    st.write("금리: 10년물 수준 35% + 최근 20거래일 상승속도 25% + 10Y-2Y 15% + 10Y-EFFR 15% + 10년물 기간프리미엄 10%.")
-    st.write("신용: HY OAS 45% + BBB OAS 20% + 최근 5거래일 확대 15% + 최근 20거래일 확대 20%.")
-    st.write("경기: 실업률 30% + Sahm Rule 35% + 신규 실업수당 35%. Sahm 단독 신호는 신규 실업수당의 최근 8주 상승 추세가 확인되지 않으면 강도를 제한합니다.")
-    st.write("물가: CPI 25% + 근원 CPI 35% + 근원 PCE 40%. 각 지표에서 전년동월비와 최근 3개월 연율화를 함께 반영합니다.")
-    st.write("구조적 위험 신호와 시장 급변 신호는 종합위험점수에 단순 가산하지 않고 별도 레이어로 표시합니다.")
-    st.write("CAPE는 Shiller PE 월별 공개 표를 보조 데이터로 사용하며, 수집 실패 시 해당 세부 비중은 자동으로 제외·재정규화합니다.")
-    st.write("현재 2·10·30년물은 가능한 경우 미 재무부 공식 일일 수익률곡선의 더 최신 값을 우선 반영하며 기준금리는 일간 EFFR을 사용합니다.")
-    st.write("참고지표: 원/달러, 엔/달러, 달러인덱스, WTI 유가는 표시 전용이며 종합위험지수에는 포함하지 않습니다.")
-
-st.caption(f"Risk Monitor 3.36.0 Readability Balance · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime('%Y-%m-%d %H:%M:%S KST')} · 캐시 즉시 표시 · 백그라운드 최신화")
+st.markdown('<section class="r38-panel"><div class="r38-section-title">LEVEL 4. 위험지수 추이 <span class="r38-info">i</span></div>',unsafe_allow_html=True)
+if 'show_history_338' not in st.session_state: st.session_state.show_history_338=False
+if st.button('최근 1년 추이 불러오기',type='secondary',key='history338'): st.session_state.show_history_338=True
+if st.session_state.show_history_338:
+    with st.spinner('추이 계산 중…'): hist=historical_risk_fast_338(data,cape)
+    if len(hist): render_history_chart_338(hist); st.caption('최근 1년 월별 스냅샷 · 빨강=최종 위험지수, 파랑 점선=신호 하한 적용 전 기본 위험지수')
+    else: st.warning('과거 위험지수를 계산할 데이터가 부족합니다.')
+else: st.caption('초기 로딩 속도를 위해 과거 추이 계산은 필요할 때만 실행합니다.')
+st.markdown('</section>',unsafe_allow_html=True)
+with st.expander('세부 데이터 및 계산 기준'):
+    st.write('종합위험지수: 시장·밸류에이션 25% + 금리 25% + 신용 15% + 경기 17% + 변동성 10% + 물가 8%.')
+    st.write('최종 위험지수는 기본 위험도, 구조·급변 신호 하한, 진행 중 시장 스트레스 하한 중 가장 높은 값을 사용합니다.')
+    st.write('시장·밸류에이션: 200일선 과열 45% + CAPE 35% + 최근 20거래일 상승 모멘텀 20%. 폭락 자체는 추가 위험으로 가산하지 않습니다.')
+    st.write('변동성: 현재 VIX 절대수준 55% + 최근 5거래일 급등 45%.')
+    st.write('금리: 10년물 수준 35% + 최근 20거래일 상승속도 25% + 10Y-2Y 15% + 10Y-EFFR 15% + 10년물 기간프리미엄 10%.')
+    st.write('신용: HY OAS 45% + BBB OAS 20% + 최근 5거래일 확대 15% + 최근 20거래일 확대 20%.')
+    st.write('경기: 실업률 30% + Sahm Rule 35% + 신규 실업수당 35%.')
+    st.write('물가: CPI 25% + 근원 CPI 35% + 근원 PCE 40%.')
+    st.write('데이터 공급자는 내부 표준 키와 분리되어 향후 실시간 API로 교체하기 쉽도록 유지합니다.')
+st.markdown(f'<div class="r38-footer">Risk Monitor 3.38.0 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
