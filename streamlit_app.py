@@ -11,11 +11,11 @@ from urllib.parse import quote
 
 st.set_page_config(page_title="미국 증시 위험 모니터", page_icon="🇺🇸", layout="wide")
 
-# v3.40.4 UI state must be initialized before any theme/navigation rendering.
+# v3.41.0 UI state must be initialized before any theme/navigation rendering.
 _qp = st.query_params
 _view = str(_qp.get("view", "dashboard"))
 _theme = str(_qp.get("theme", "light"))
-if _view not in ("dashboard", "heatmap"):
+if _view not in ("dashboard", "heatmap", "news"):
     _view = "dashboard"
 if _theme not in ("light", "dark"):
     _theme = "light"
@@ -136,6 +136,21 @@ div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:
   .tm-sector-label{font-size:11px;padding:4px 7px}
   .tm-tile:focus::after{left:0;top:calc(100% + 5px);min-width:210px;max-width:260px;font-size:11px}
 }
+
+.news-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px}
+.news-toolbar-note{font-size:11px;color:#7d8998}
+.news-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.news-card{min-height:112px;padding:14px 15px 13px;border:1px solid #dde3eb;border-radius:12px;background:#fff;box-sizing:border-box}
+.news-meta{display:flex;align-items:center;gap:6px;margin-bottom:8px;color:#8a95a3;font-size:10px;white-space:nowrap;overflow:hidden}
+.news-category{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;background:#eef3ff;color:#4565c5;font-weight:800}
+.news-title{display:block;color:#19222d!important;text-decoration:none!important;font-size:13.5px;font-weight:780;line-height:1.42}
+.news-go{margin-top:10px;color:#758190;font-size:9.5px;font-weight:700}
+.r38-dark .news-card{background:#171e28;border-color:#2a3442}
+.r38-dark .news-title{color:#f0f3f7!important}
+.r38-dark .news-meta,.r38-dark .news-go,.r38-dark .news-toolbar-note{color:#9ba7b5}
+.r38-dark .news-category{background:#22345f;color:#b8c8ff}
+@media(max-width:780px){.news-list{grid-template-columns:1fr}.news-card{min-height:104px;padding:13px}.news-title{font-size:13px}}
+
 
 </style>""", unsafe_allow_html=True)
 
@@ -512,10 +527,98 @@ def _heatmap_html(snapshot,dark=False):
         f'<div class="tm-viewport"><div class="tm-wrap">{"".join(blocks)}</div></div>'
     )
 
+
+NEWS_CACHE=ROOT_CACHE / "korean_econ_news.json"
+NEWS_TTL_SECONDS=600
+NEWS_QUERIES=[
+    ("미국 증시","뉴욕증시 OR 미국증시 OR S&P500 when:2d"),
+    ("연준·금리","연준 OR FOMC OR 미국금리 OR 미국국채 when:3d"),
+    ("물가·고용","미국 CPI OR 미국 PCE OR 미국 고용 OR 미국 실업률 when:4d"),
+    ("경제·기업","미국 경제 OR 월가 OR 미국 기업실적 when:2d"),
+]
+
+def _read_news_cache():
+    try: return json.loads(NEWS_CACHE.read_text(encoding="utf-8"))
+    except Exception: return {"updated":0,"items":[]}
+
+def _news_cache_fresh():
+    return _file_fresh(NEWS_CACHE,NEWS_TTL_SECONDS)
+
+def _clean_news_title(title,source=""):
+    title=" ".join(str(title or "").split())
+    if source:
+        suffix=" - "+source.strip()
+        if title.endswith(suffix): title=title[:-len(suffix)].rstrip()
+    return title
+
+def _fetch_google_news_rss(label,query):
+    import xml.etree.ElementTree as ET
+    from email.utils import parsedate_to_datetime
+    q=quote(query,safe="")
+    url=f"https://news.google.com/rss/search?q={q}&hl=ko&gl=KR&ceid=KR:ko"
+    r=requests.get(url,headers={"User-Agent":"Mozilla/5.0"},timeout=(3,8)); r.raise_for_status()
+    root=ET.fromstring(r.content); out=[]
+    for item in root.findall(".//item")[:18]:
+        title=item.findtext("title") or ""; link=item.findtext("link") or ""; pub=item.findtext("pubDate") or ""
+        sn=item.find("source"); source=(sn.text or "").strip() if sn is not None else ""
+        title=_clean_news_title(title,source)
+        if not title or not link: continue
+        try:
+            dt=parsedate_to_datetime(pub)
+            if dt.tzinfo is None: dt=dt.replace(tzinfo=timezone.utc)
+            published=dt.timestamp()
+        except Exception: published=0
+        out.append({"category":label,"title":title,"source":source or "Google News","link":link,"published":published})
+    return out
+
+def _fetch_news_snapshot(force=False):
+    cached=_read_news_cache()
+    if not force and _news_cache_fresh() and cached.get("items"): return cached
+    items=[]; errors=[]
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        futs={ex.submit(_fetch_google_news_rss,l,q):l for l,q in NEWS_QUERIES}
+        for fut in as_completed(futs):
+            try: items.extend(fut.result())
+            except Exception as e: errors.append(str(e))
+    seen=set(); clean=[]
+    for q in sorted(items,key=lambda z:float(z.get("published",0)),reverse=True):
+        k=" ".join(q.get("title","").lower().split())
+        if not k or k in seen: continue
+        seen.add(k); clean.append(q)
+    if clean:
+        snap={"updated":time.time(),"items":clean[:48],"errors":errors,"source":"Google News RSS"}
+        _write_json_atomic(NEWS_CACHE,snap); return snap
+    if cached.get("items"):
+        cached=dict(cached); cached["stale"]=True; return cached
+    return {"updated":0,"items":[],"stale":True}
+
+def _news_when(ts):
+    if not ts: return ""
+    try:
+        dt=datetime.fromtimestamp(float(ts),tz=ZoneInfo("Asia/Seoul")); now=datetime.now(ZoneInfo("Asia/Seoul"))
+        sec=max(0,(now-dt).total_seconds())
+        if sec<3600: return f"{max(1,int(sec//60))}분 전"
+        if sec<86400: return f"{int(sec//3600)}시간 전"
+        if sec<172800: return "어제"
+        return dt.strftime("%m.%d %H:%M")
+    except Exception: return ""
+
+def _news_html(items):
+    cards=[]
+    for q in items:
+        cards.append(
+            '<article class="news-card">'
+            f'<div class="news-meta"><span class="news-category">{_esc(q.get("category",""))}</span>'
+            f'<span>{_esc(q.get("source",""))}</span><span>·</span><span>{_esc(_news_when(q.get("published",0)))}</span></div>'
+            f'<a class="news-title" href="{_esc(q.get("link",""))}" target="_blank" rel="noopener noreferrer">{_esc(q.get("title",""))}</a>'
+            '<div class="news-go">기사 보기 ↗</div></article>'
+        )
+    return '<div class="news-list">'+"".join(cards)+'</div>'
+
 CAPE_URL="https://www.multpl.com/shiller-pe/table/by-month"
 
 
-# v3.40.4 source refresh TTLs.
+# v3.41.0 source refresh TTLs.
 # UI reruns never need to hit the network merely because the user changed a view/theme.
 SERIES_TTL_SECONDS={
     "EFFR":1800,
@@ -1235,7 +1338,7 @@ def delta_value(a,b):
     return d,"— 0.0","flat"
 
 
-# v3.40.4 adaptive dashboard refinement — Streamlit engine + custom HTML/CSS skin.
+# v3.41.0 adaptive dashboard refinement — Streamlit engine + custom HTML/CSS skin.
 st.markdown("""<style>
 html,body,.stApp{background:#f5f7fb!important;color:#171b23}
 header[data-testid="stHeader"]{background:transparent!important}
@@ -1279,7 +1382,7 @@ div[data-testid="stButton"] button{border:1px solid #dfe4eb!important;background
 }
 @media(max-width:780px){.r38-sidebar{display:none}.block-container{padding:calc(env(safe-area-inset-top,0px) + 44px) 12px 40px!important}.r38-mobilebar{display:flex;align-items:center;justify-content:space-between;background:#101b2d;color:#fff;margin:-18px -12px 15px;padding:12px 14px}.r38-mobile-brand{font-size:13px;font-weight:800}.r38-mobile-menu{font-size:19px}.r38-title{font-size:23px}.r38-subtitle{font-size:11.5px}.r38-head-actions{display:none}.r38-panel{padding:12px 11px}.r38-section-title{font-size:15px}.r38-hero-grid{grid-template-columns:1fr}.r38-hero-card{min-height:255px}.r38-hero-main{grid-template-columns:1fr;gap:10px;min-height:auto}.r38-hero-side{justify-content:flex-start;text-align:left}.r38-side-copy{max-width:none}.r38-callout{margin-top:14px;height:auto;min-height:auto}.r38-card-title{font-size:14px}.r38-big{font-size:37px;white-space:nowrap}.r38-signal-main{font-size:31px;white-space:nowrap}.r38-risk-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.r38-market-table{grid-template-columns:repeat(2,minmax(0,1fr))}.r38-market-col,.r38-market-col:nth-child(3){border-right:1px solid #e7ebf0}.r38-market-col:nth-child(even){border-right:0}.r38-market-col:nth-child(n+3){border-top:1px solid #e7ebf0}.r38-recession{gap:5px}.r38-metric{min-height:80px;padding:9px}.r38-spark{width:58px;flex-basis:58px}.r38-info-tip{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.98);width:min(340px,86vw);font-size:13px;padding:14px 15px;border-radius:14px;box-shadow:0 18px 55px rgba(0,0,0,.20)}.r38-info:hover .r38-info-tip,.r38-info:focus .r38-info-tip{transform:translate(-50%,-50%) scale(1)}.r38-footer{text-align:left}}
 </style>""", unsafe_allow_html=True)
-# ---------- v3.40.4 redesigned frontend ----------
+# ---------- v3.41.0 redesigned frontend ----------
 import math
 
 def _esc(x): return html.escape(str(x))
@@ -1380,10 +1483,11 @@ now_kst=datetime.now(ZoneInfo('Asia/Seoul'))
 _theme_q='dark' if _theme=='dark' else 'light'
 _dashboard_active=' active' if _view=='dashboard' else ''
 _heatmap_active=' active' if _view=='heatmap' else ''
+_news_active=' active' if _view=='news' else ''
 _theme_next='light' if _theme=='dark' else 'dark'
-sidebar='''<aside class="r38-sidebar"><div class="r38-brand"><span class="r38-brand-mark"><svg viewBox="0 0 32 38" fill="none"><path d="M16 2.5 27 7v8.4c0 8.1-4.4 14.4-11 18.1C9.4 29.8 5 23.5 5 15.4V7L16 2.5Z" stroke="#E7EDF7" stroke-width="1.5"/><path d="m11 18 3 3 7-8" stroke="#E7EDF7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Market Risk<br>Monitor</span></div><nav class="r38-nav"><a class="r38-nav-item'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">⌂</span>대시보드</a><a class="r38-nav-item'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▦</span>S&P500 시장 맵</a><div class="r38-nav-item"><span class="r38-nav-icon">◉</span>위험지수</div><div class="r38-nav-item"><span class="r38-nav-icon">≋</span>시장 상태</div><div class="r38-nav-item"><span class="r38-nav-icon">▣</span>데이터</div><div class="r38-nav-item"><span class="r38-nav-icon">♢</span>알림</div><div class="r38-nav-item"><span class="r38-nav-icon">▤</span>리포트</div><div class="r38-nav-item"><span class="r38-nav-icon">⚙</span>설정</div><div class="r38-nav-item"><span class="r38-nav-icon">?</span>도움말</div></nav><div class="r38-side-bottom"><div class="r38-side-title">최종 업데이트</div><div>'''+now_kst.strftime('%Y.%m.%d %H:%M')+'''</div><div>(한국시간 기준)</div><a class="r38-toggle" href="?view='''+_view+'''&theme='''+_theme_next+'''" target="_self">다크 모드 <span class="r38-toggle-pill'''+(' on' if _theme=='dark' else '')+'''"></span></a></div></aside><div class="r38-mobilebar"><div class="r38-mobile-brand">Market Risk Monitor</div><div class="r38-mobile-menu">☰</div></div>'''
+sidebar='''<aside class="r38-sidebar"><div class="r38-brand"><span class="r38-brand-mark"><svg viewBox="0 0 32 38" fill="none"><path d="M16 2.5 27 7v8.4c0 8.1-4.4 14.4-11 18.1C9.4 29.8 5 23.5 5 15.4V7L16 2.5Z" stroke="#E7EDF7" stroke-width="1.5"/><path d="m11 18 3 3 7-8" stroke="#E7EDF7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Market Risk<br>Monitor</span></div><nav class="r38-nav"><a class="r38-nav-item'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">⌂</span>대시보드</a><a class="r38-nav-item'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▦</span>S&P500 시장 맵</a><div class="r38-nav-item"><span class="r38-nav-icon">◉</span>위험지수</div><div class="r38-nav-item"><span class="r38-nav-icon">≋</span>시장 상태</div><div class="r38-nav-item"><span class="r38-nav-icon">▣</span>데이터</div><a class="r38-nav-item'''+_news_active+'''" href="?view=news&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▧</span>뉴스</a><div class="r38-nav-item"><span class="r38-nav-icon">▤</span>리포트</div><div class="r38-nav-item"><span class="r38-nav-icon">⚙</span>설정</div><div class="r38-nav-item"><span class="r38-nav-icon">?</span>도움말</div></nav><div class="r38-side-bottom"><div class="r38-side-title">최종 업데이트</div><div>'''+now_kst.strftime('%Y.%m.%d %H:%M')+'''</div><div>(한국시간 기준)</div><a class="r38-toggle" href="?view='''+_view+'''&theme='''+_theme_next+'''" target="_self">다크 모드 <span class="r38-toggle-pill'''+(' on' if _theme=='dark' else '')+'''"></span></a></div></aside><div class="r38-mobilebar"><div class="r38-mobile-brand">Market Risk Monitor</div><div class="r38-mobile-menu">☰</div></div>'''
 st.markdown(sidebar,unsafe_allow_html=True)
-st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.40.4</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
+st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.41.0</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
 
 refresh_indicator()
 
@@ -1407,6 +1511,25 @@ if _view=="heatmap":
         )
     else:
         st.warning("시장 맵 데이터를 불러오지 못했습니다. 이전 캐시도 없습니다. 잠시 후 다시 시도해 주세요.")
+    st.stop()
+
+
+if _view=="news":
+    st.markdown(
+        '<section class="r38-panel"><div class="r38-section-title">경제 뉴스</div>'
+        '<div class="r38-note">미국 증시·연준·금리·물가·고용 관련 한국어 뉴스 제목을 모아 보여줍니다. '
+        '기사 본문은 저장하거나 복제하지 않으며, 제목을 누르면 원문 제공 사이트로 이동합니다.</div></section>',
+        unsafe_allow_html=True
+    )
+    _news=_fetch_news_snapshot(force=False); _news_items=_news.get("items",[])
+    if _news_items:
+        _news_time=datetime.fromtimestamp(_news.get("updated",time.time()),tz=ZoneInfo("Asia/Seoul")).strftime("%H:%M KST")
+        _stale_news=" · 캐시 지연" if _news.get("stale") else ""
+        st.markdown(f'<div class="news-toolbar"><div class="news-toolbar-note">최근 뉴스 {len(_news_items)}건 · 10분 캐시 · 마지막 갱신 {_news_time}{_stale_news}</div><div class="news-toolbar-note">출처: Google News RSS</div></div>',unsafe_allow_html=True)
+        st.markdown(_news_html(_news_items),unsafe_allow_html=True)
+        st.caption("※ 제목·출처·발행시각·링크만 표시합니다. 링크는 Google News 경유 후 해당 언론사 기사로 연결될 수 있습니다.")
+    else:
+        st.warning("뉴스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")
     st.stop()
 
 _structure_count=int(structure.get('count',0) or 0); _structure_raw=structure.get('level','정상')
@@ -1518,4 +1641,4 @@ with st.expander('세부 데이터 및 계산 기준'):
     st.write('경기: 실업률 30% + Sahm Rule 35% + 신규 실업수당 35%.')
     st.write('물가: CPI 25% + 근원 CPI 35% + 근원 PCE 40%.')
     st.write('데이터 공급자는 내부 표준 키와 분리되어 향후 실시간 API로 교체하기 쉽도록 유지합니다.')
-st.markdown(f'<div class="r38-footer">Risk Monitor 3.40.4 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
+st.markdown(f'<div class="r38-footer">Risk Monitor 3.41.0 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
