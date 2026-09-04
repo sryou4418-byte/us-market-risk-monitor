@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 st.set_page_config(page_title="미국 증시 위험 모니터", page_icon="🇺🇸", layout="wide")
 
-# v3.43.0 UI state must be initialized before any theme/navigation rendering.
+# v3.43.1 UI state must be initialized before any theme/navigation rendering.
 _qp = st.query_params
 _view = str(_qp.get("view", "dashboard"))
 _theme = str(_qp.get("theme", "light"))
@@ -170,21 +170,21 @@ div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:
 .risk-detail-hero{display:grid;grid-template-columns:1.15fr .85fr;gap:12px;margin-bottom:12px}
 .risk-score-card,.risk-explain-card,.risk-flow-card,.risk-reasons-card,.risk-band-card,.risk-signal-card,.risk-component-card{border:1px solid #dde3eb;border-radius:14px;background:#fff;box-sizing:border-box}
 .risk-score-card{padding:20px 22px;display:flex;align-items:center;justify-content:space-between;gap:18px}
-.risk-score-main{display:flex;align-items:flex-end;gap:8px}.risk-score-num{font-size:64px;line-height:.9;font-weight:900;letter-spacing:-2px;color:#2459d5}.risk-score-den{font-size:18px;color:#6f7a88;margin-bottom:5px}
-.risk-score-side{display:flex;flex-direction:column;gap:7px;align-items:flex-start}.risk-badge{display:inline-flex;align-items:center;height:28px;padding:0 10px;border-radius:8px;border:1px solid #9cb7f6;background:#f5f8ff;color:#2459d5;font-size:12px;font-weight:800}.risk-delta{font-size:11px;color:#7d8998}
-.risk-explain-card{padding:18px 20px;display:flex;align-items:center;font-size:13px;line-height:1.55;color:#334050}.risk-section-title{font-size:15px;font-weight:850;color:#1b2430;margin-bottom:12px}
+.risk-score-main{display:flex;align-items:flex-end;gap:8px}.risk-score-num{font-size:72px;line-height:.9;font-weight:900;letter-spacing:-2px;color:#2459d5}.risk-score-den{font-size:21px;color:#6f7a88;margin-bottom:5px}
+.risk-score-side{display:flex;flex-direction:column;gap:7px;align-items:flex-start}.risk-badge{display:inline-flex;align-items:center;height:32px;padding:0 10px;border-radius:8px;border:1px solid #9cb7f6;background:#f5f8ff;color:#2459d5;font-size:13px;font-weight:800}.risk-delta{font-size:12.5px;color:#7d8998}
+.risk-explain-card{padding:20px 22px;display:flex;align-items:center;font-size:15px;line-height:1.55;color:#334050}.risk-section-title{font-size:17px;font-weight:850;color:#1b2430;margin-bottom:12px}
 .risk-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}.risk-flow-card,.risk-reasons-card,.risk-band-card,.risk-signal-card{padding:16px}
-.risk-flow{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.risk-flow-step{padding:12px 8px;border:1px solid #dde3eb;border-radius:10px;background:#fbfcfe;text-align:center}.risk-flow-label{font-size:9.5px;color:#7f8a98;min-height:28px}.risk-flow-value{font-size:25px;font-weight:900;color:#2459d5;margin-top:3px}.risk-flow-sub{font-size:8.5px;color:#98a1ad;margin-top:3px}
-.risk-signal-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.risk-signal-box{padding:14px;border:1px solid #dde3eb;border-radius:10px;background:#fbfcfe}.risk-signal-count{font-size:28px;font-weight:900;color:#2459d5}.risk-signal-label{font-size:11px;color:#7d8998}
-.risk-components{display:grid;grid-template-columns:1fr 1fr;gap:8px}.risk-component-card{padding:12px 14px}.risk-component-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.risk-component-name{font-size:12px;font-weight:800;color:#26313e}.risk-component-score{font-size:15px;font-weight:900;color:#1f2a37}
-.risk-bar{height:7px;border-radius:999px;background:#e9edf3;overflow:hidden;margin-top:8px}.risk-bar>span{display:block;height:100%;background:#2b5fd7;border-radius:999px}.risk-component-note{font-size:9.5px;color:#8b96a3;margin-top:6px}
-.risk-reasons{display:flex;flex-direction:column;gap:9px}.risk-reason{display:flex;gap:9px;align-items:flex-start;font-size:11.5px;line-height:1.45;color:#34404e}.risk-reason-dot{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:none;background:#2b5fd7;color:white;font-size:10px;font-weight:900}
+.risk-flow{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.risk-flow-step{padding:12px 8px;border:1px solid #dde3eb;border-radius:10px;background:#fbfcfe;text-align:center}.risk-flow-label{font-size:11px;color:#7f8a98;min-height:28px}.risk-flow-value{font-size:29px;font-weight:900;color:#2459d5;margin-top:3px}.risk-flow-sub{font-size:10px;color:#98a1ad;margin-top:3px}
+.risk-signal-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.risk-signal-box{padding:14px;border:1px solid #dde3eb;border-radius:10px;background:#fbfcfe}.risk-signal-count{font-size:32px;font-weight:900;color:#2459d5}.risk-signal-label{font-size:12.5px;color:#7d8998}
+.risk-components{display:grid;grid-template-columns:1fr 1fr;gap:8px}.risk-component-card{padding:12px 14px}.risk-component-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.risk-component-name{font-size:13.5px;font-weight:800;color:#26313e}.risk-component-score{font-size:17px;font-weight:900;color:#1f2a37}
+.risk-bar{height:7px;border-radius:999px;background:#e9edf3;overflow:hidden;margin-top:8px}.risk-bar>span{display:block;height:100%;background:#2b5fd7;border-radius:999px}.risk-component-note{font-size:11px;color:#8b96a3;margin-top:6px}
+.risk-reasons{display:flex;flex-direction:column;gap:9px}.risk-reason{display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.45;color:#34404e}.risk-reason-dot{width:21px;height:21px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:none;background:#2b5fd7;color:white;font-size:11px;font-weight:900}
 .risk-band-track{position:relative;display:grid;grid-template-columns:repeat(5,1fr);height:10px;border-radius:999px;overflow:visible;margin:20px 0 8px}.risk-band-track>span{height:10px}.risk-band-track span:nth-child(1){background:#376fd4}.risk-band-track span:nth-child(2){background:#46ad65}.risk-band-track span:nth-child(3){background:#e3bd3f}.risk-band-track span:nth-child(4){background:#e47a2f}.risk-band-track span:nth-child(5){background:#df4545}
-.risk-band-marker{position:absolute;top:-6px;width:28px;height:22px;border-radius:11px;background:#2459d5;color:#fff;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;transform:translateX(-50%)}.risk-band-labels{display:grid;grid-template-columns:repeat(5,1fr);font-size:9px;color:#808b98;text-align:center}
+.risk-band-marker{position:absolute;top:-6px;width:28px;height:22px;border-radius:11px;background:#2459d5;color:#fff;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;transform:translateX(-50%)}.risk-band-labels{display:grid;grid-template-columns:repeat(5,1fr);font-size:10.5px;color:#808b98;text-align:center}
 .r38-dark .risk-score-card,.r38-dark .risk-explain-card,.r38-dark .risk-flow-card,.r38-dark .risk-reasons-card,.r38-dark .risk-band-card,.r38-dark .risk-signal-card,.r38-dark .risk-component-card{background:#171e28;border-color:#2a3442}
 .r38-dark .risk-section-title,.r38-dark .risk-component-name,.r38-dark .risk-component-score,.r38-dark .risk-explain-card,.r38-dark .risk-reason{color:#f0f3f7}.r38-dark .risk-flow-step,.r38-dark .risk-signal-box{background:#121923;border-color:#2a3442}
 @media(max-width:900px){.risk-detail-hero,.risk-detail-grid{grid-template-columns:1fr}.risk-components{grid-template-columns:1fr}}
-@media(max-width:620px){.risk-score-num{font-size:54px}.risk-flow{grid-template-columns:1fr 1fr}.risk-signal-row{grid-template-columns:1fr}}
+@media(max-width:620px){.risk-score-num{font-size:60px}.risk-flow{grid-template-columns:1fr 1fr}.risk-signal-row{grid-template-columns:1fr}}
 
 
 </style>""", unsafe_allow_html=True)
@@ -820,7 +820,7 @@ def _risk_sentence_engine(category_scores, structural_count, rapid_count, struct
 CAPE_URL="https://www.multpl.com/shiller-pe/table/by-month"
 
 
-# v3.43.0 source refresh TTLs.
+# v3.43.1 source refresh TTLs.
 # UI reruns never need to hit the network merely because the user changed a view/theme.
 SERIES_TTL_SECONDS={
     "EFFR":1800,
@@ -1540,7 +1540,7 @@ def delta_value(a,b):
     return d,"— 0.0","flat"
 
 
-# v3.43.0 adaptive dashboard refinement — Streamlit engine + custom HTML/CSS skin.
+# v3.43.1 adaptive dashboard refinement — Streamlit engine + custom HTML/CSS skin.
 st.markdown("""<style>
 html,body,.stApp{background:#f5f7fb!important;color:#171b23}
 header[data-testid="stHeader"]{background:transparent!important}
@@ -1586,7 +1586,7 @@ div[data-testid="stButton"] button{border:1px solid #dfe4eb!important;background
 }
 @media(max-width:780px){.r38-sidebar{display:none}.block-container{padding:calc(env(safe-area-inset-top,0px) + 44px) 12px 40px!important}.r38-mobilebar{display:flex;align-items:center;justify-content:space-between;background:#101b2d;color:#fff;margin:-18px -12px 15px;padding:12px 14px}.r38-mobile-brand{font-size:13px;font-weight:800}.r38-mobile-menu{font-size:19px}.r38-title{font-size:23px}.r38-subtitle{font-size:11.5px}.r38-head-actions{display:none}.r38-panel{padding:12px 11px}.r38-section-title{font-size:15px}.r38-hero-grid{grid-template-columns:1fr}.r38-hero-card{min-height:255px}.r38-hero-main{grid-template-columns:1fr;gap:10px;min-height:auto}.r38-hero-side{justify-content:flex-start;text-align:left}.r38-side-copy{max-width:none}.r38-callout{margin-top:14px;height:auto;min-height:auto}.r38-card-title{font-size:14px}.r38-big{font-size:37px;white-space:nowrap}.r38-signal-main{font-size:31px;white-space:nowrap}.r38-risk-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.r38-market-table{grid-template-columns:repeat(2,minmax(0,1fr))}.r38-market-col,.r38-market-col:nth-child(3){border-right:1px solid #e7ebf0}.r38-market-col:nth-child(even){border-right:0}.r38-market-col:nth-child(n+3){border-top:1px solid #e7ebf0}.r38-recession{gap:5px}.r38-metric{min-height:80px;padding:9px}.r38-spark{width:58px;flex-basis:58px}.r38-info-tip{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.98);width:min(340px,86vw);font-size:13px;padding:14px 15px;border-radius:14px;box-shadow:0 18px 55px rgba(0,0,0,.20)}.r38-info:hover .r38-info-tip,.r38-info:focus .r38-info-tip{transform:translate(-50%,-50%) scale(1)}.r38-footer{text-align:left}}
 </style>""", unsafe_allow_html=True)
-# ---------- v3.43.0 redesigned frontend ----------
+# ---------- v3.43.1 redesigned frontend ----------
 import math
 
 def _esc(x): return html.escape(str(x))
@@ -1692,7 +1692,7 @@ _news_active=' active' if _view=='news' else ''
 _theme_next='light' if _theme=='dark' else 'dark'
 sidebar='''<aside class="r38-sidebar"><div class="r38-brand"><span class="r38-brand-mark"><svg viewBox="0 0 32 38" fill="none"><path d="M16 2.5 27 7v8.4c0 8.1-4.4 14.4-11 18.1C9.4 29.8 5 23.5 5 15.4V7L16 2.5Z" stroke="#E7EDF7" stroke-width="1.5"/><path d="m11 18 3 3 7-8" stroke="#E7EDF7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Market Risk<br>Monitor</span></div><nav class="r38-nav"><a class="r38-nav-item'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">⌂</span>대시보드</a><a class="r38-nav-item'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▦</span>S&P500 시장 맵</a><a class="r38-nav-item'''+_risk_active+'''" href="?view=risk&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">◉</span>위험지수</a><div class="r38-nav-item"><span class="r38-nav-icon">≋</span>시장 상태</div><div class="r38-nav-item"><span class="r38-nav-icon">▣</span>데이터</div><a class="r38-nav-item'''+_news_active+'''" href="?view=news&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▧</span>뉴스</a><div class="r38-nav-item"><span class="r38-nav-icon">▤</span>리포트</div><div class="r38-nav-item"><span class="r38-nav-icon">⚙</span>설정</div><div class="r38-nav-item"><span class="r38-nav-icon">?</span>도움말</div></nav><div class="r38-side-bottom"><div class="r38-side-title">최종 업데이트</div><div>'''+now_kst.strftime('%Y.%m.%d %H:%M')+'''</div><div>(한국시간 기준)</div><a class="r38-toggle" href="?view='''+_view+'''&theme='''+_theme_next+'''" target="_self">다크 모드 <span class="r38-toggle-pill'''+(' on' if _theme=='dark' else '')+'''"></span></a></div></aside><div class="r38-mobilebar"><div class="r38-mobile-brand">Market Risk Monitor</div><div class="r38-mobile-menu">☰</div></div>'''
 st.markdown(sidebar,unsafe_allow_html=True)
-st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.43.0</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
+st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.43.1</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
 
 refresh_indicator()
 
@@ -1924,4 +1924,4 @@ with st.expander('세부 데이터 및 계산 기준'):
     st.write('경기: 실업률 30% + Sahm Rule 35% + 신규 실업수당 35%.')
     st.write('물가: CPI 25% + 근원 CPI 35% + 근원 PCE 40%.')
     st.write('데이터 공급자는 내부 표준 키와 분리되어 향후 실시간 API로 교체하기 쉽도록 유지합니다.')
-st.markdown(f'<div class="r38-footer">Risk Monitor 3.43.0 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
+st.markdown(f'<div class="r38-footer">Risk Monitor 3.43.1 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
