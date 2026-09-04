@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 st.set_page_config(page_title="미국 증시 위험 모니터", page_icon="🇺🇸", layout="wide")
 
-# v3.38.8 UI state must be initialized before any theme/navigation rendering.
+# v3.38.9 UI state must be initialized before any theme/navigation rendering.
 _qp = st.query_params
 _view = str(_qp.get("view", "dashboard"))
 _theme = str(_qp.get("theme", "light"))
@@ -797,14 +797,14 @@ if prev_snapshot is not None:
     prev_rapid=rapid_alert(prev_fast,{})
     prev_overall,_=apply_risk_floors(prev_snapshot["overall"],prev_structure,prev_rapid,prev_data["S&P500"],prev_data["VIX"],prev_fast.get("신용",np.nan))
 
-# v3.38.8 adaptive dashboard refinement — Streamlit engine + custom HTML/CSS skin.
+# v3.38.9 adaptive dashboard refinement — Streamlit engine + custom HTML/CSS skin.
 st.markdown("""<style>
 html,body,.stApp{background:#f5f7fb!important;color:#171b23}
 header[data-testid="stHeader"]{background:transparent!important}
 .block-container{max-width:none!important;padding:26px 28px 54px 188px!important}
 [data-testid="stSidebar"]{display:none!important}[data-testid="stToolbar"]{right:10px!important}#MainMenu{visibility:hidden}
 .r38-sidebar{position:fixed;z-index:50;left:0;top:0;bottom:0;width:158px;background:linear-gradient(180deg,#101b2d,#0d1726);color:#fff;padding:22px 13px 18px;box-sizing:border-box}.r38-brand{display:flex;align-items:center;gap:9px;padding:0 9px 20px;font-size:14px;font-weight:800;line-height:1.25}.r38-brand-mark{width:27px;height:32px}.r38-brand-mark svg{width:27px;height:32px}.r38-nav{display:flex;flex-direction:column;gap:6px}.r38-nav-item{display:flex;align-items:center;gap:11px;height:42px;border-radius:7px;padding:0 11px;color:#aeb9c9;font-size:13.5px;font-weight:650;text-decoration:none!important}.r38-nav-item.active{background:linear-gradient(90deg,#365dce,#506be6);color:#fff;box-shadow:0 5px 16px rgba(45,78,190,.28)}.r38-nav-icon{width:17px;text-align:center;font-size:15px}.r38-side-bottom{position:absolute;left:20px;right:20px;bottom:20px;border-top:1px solid rgba(255,255,255,.08);padding-top:16px;color:#9eabba;font-size:11px;line-height:1.55}.r38-side-title{color:#dbe3ef;font-weight:700}.r38-toggle{display:flex;align-items:center;justify-content:space-between;margin-top:16px;color:#9eabba!important;text-decoration:none!important}.r38-toggle-pill{width:34px;height:18px;border-radius:999px;background:#566274;position:relative}.r38-toggle-pill:after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:#d9dee6;left:2px;top:2px;transition:.15s}.r38-toggle-pill.on{background:#4469d8}.r38-toggle-pill.on:after{left:18px;background:#fff}
-.r38-mobilebar{display:none}.r38-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}.r38-title{font-size:30px;font-weight:850;letter-spacing:-.045em;line-height:1.18}.r38-subtitle{font-size:15px;color:#69717d;margin-top:6px}.r38-credit{font-size:12px;color:#939aa5;margin-top:3px}.r38-head-actions{display:flex;gap:10px}.r38-action{height:44px;border:1px solid #dfe4eb;border-radius:8px;background:#fff;padding:0 15px;display:flex;align-items:center;font-size:14px;font-weight:650;color:#3c4654;text-decoration:none!important}
+.r38-mobilebar{display:none}.r38-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}.r38-title{font-size:30px;font-weight:850;letter-spacing:-.045em;line-height:1.18}.r38-subtitle{font-size:15px;color:#69717d;margin-top:6px}.r38-credit{font-size:12px;color:#939aa5;margin-top:3px}.r38-head-actions{display:flex;gap:10px}.r38-action{cursor:pointer;height:44px;border:1px solid #dfe4eb;border-radius:8px;background:#fff;padding:0 15px;display:flex;align-items:center;font-size:14px;font-weight:650;color:#3c4654;text-decoration:none!important}
 .r38-panel{background:#fff;border:1px solid #dde3eb;border-radius:12px;padding:19px;margin-bottom:15px;box-shadow:0 1px 2px rgba(25,38,58,.025)}.r38-section-title{display:flex;align-items:center;gap:7px;font-size:18px;font-weight:820;color:#202631;margin-bottom:15px}
 .r38-info{position:relative;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border:1px solid #9da5af;border-radius:50%;font-size:9px;color:#7d8590;font-weight:800;cursor:help;outline:none;flex:0 0 15px}.r38-info:hover,.r38-info:focus{background:#eef2f7;color:#37404b;border-color:#66717e}.r38-info-tip{visibility:hidden;opacity:0;pointer-events:none;position:absolute;z-index:9999;left:50%;top:23px;transform:translateX(-50%) translateY(-3px);width:min(330px,78vw);padding:12px 13px;border:1px solid #dfe4ea;border-radius:11px;background:#fff;box-shadow:0 12px 32px rgba(13,24,40,.15);font-size:12.5px;font-weight:550;line-height:1.55;color:#414955;text-align:left;white-space:normal;transition:opacity .12s ease,transform .12s ease}.r38-info:hover .r38-info-tip,.r38-info:focus .r38-info-tip{visibility:visible;opacity:1;transform:translateX(-50%) translateY(0)}
 .r38-hero-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;align-items:stretch}.r38-hero-card{position:relative;min-height:306px;height:100%;border:1px solid #e3e7ed;border-radius:11px;padding:19px 19px 17px;box-sizing:border-box;background:#fff;overflow:visible;display:flex;flex-direction:column}.r38-hero-card.danger{border-color:#f0dddd}.r38-hero-card.warn{border-color:#f0e4cf}.r38-card-title{font-size:16.5px;font-weight:800;color:#3a4049;display:flex;align-items:center;gap:6px}.r38-horizon{font-size:12.5px;color:#8b929d;margin-top:4px}.r38-hero-main{display:grid;grid-template-columns:minmax(0,1fr) minmax(145px,38%);align-items:center;gap:18px;margin-top:18px;min-height:126px;flex:1}.r38-hero-left{min-width:0}.r38-hero-side{min-width:0;display:flex;align-items:center;justify-content:flex-start;text-align:left}.r38-big{font-size:45px;font-weight:850;line-height:1;white-space:nowrap;letter-spacing:-.05em}.r38-big.red{color:#d92f3b}.r38-big.orange{color:#d77b00}.r38-unit{font-size:14px;font-weight:650;white-space:nowrap;color:#555d68;margin-left:4px}.r38-badge{display:inline-flex;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800;margin-top:9px}.r38-badge.red{color:#fff;background:#e83d49}.r38-badge.orange{color:#fff;background:#f09a18}.r38-badge.green{color:#fff;background:#2ca675}.r38-badge.gray{color:#5e6672;background:#eef1f5}.r38-delta-label{font-size:12px;color:#737b87}.r38-delta{font-size:14px;margin-top:4px;font-weight:800}.r38-up{color:#e03b45}.r38-down{color:#2f70c9}.r38-flat{color:#7b8490}.r38-side-copy{font-size:13.5px;line-height:1.5;color:#616a76;font-weight:700;max-width:185px}.r38-side-copy strong{display:block;font-size:14.5px;color:#343b45;margin-bottom:4px}.r38-signal-main{font-size:38px;font-weight:850;white-space:nowrap;line-height:1.05;letter-spacing:-.035em;color:#252b34}.r38-signal-meta{font-size:13px;color:#707985;margin-top:8px;font-weight:700}.r38-callout{position:static;margin-top:12px;height:72px;min-height:72px;box-sizing:border-box;border-radius:8px;padding:12px 13px;font-size:12.5px;line-height:1.5;background:#fff6f6;border:1px solid #f5dede;color:#5c3b3e;display:flex;flex-direction:column;justify-content:center}.r38-callout.warn{background:#fff9ef;border-color:#f3e4c9;color:#69523a}.r38-summary-lines{display:flex;flex-direction:column;gap:3px}.r38-summary-lines b{font-weight:820}.r38-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}.r38-chip{display:inline-flex;align-items:center;min-height:25px;box-sizing:border-box;padding:4px 8px;border-radius:999px;background:#fff0f0;border:1px solid #f3d3d3;color:#c33b42;font-size:11.5px;font-weight:750;line-height:1.2;white-space:nowrap}.r38-chip.warn{background:#fff5e7;border-color:#f0ddbd;color:#a76600}.r38-interpret{margin-top:12px;padding:14px 16px;border-radius:9px;background:#eef7ff;border:1px solid #d6e9f9;font-size:13.5px;line-height:1.6;color:#294862;font-weight:620}.r38-interpret-label{font-weight:850;color:#1f6598;margin-right:9px;white-space:nowrap}
@@ -841,7 +841,7 @@ div[data-testid="stButton"] button{border:1px solid #dfe4eb!important;background
 }
 @media(max-width:780px){.r38-sidebar{display:none}.block-container{padding:calc(env(safe-area-inset-top,0px) + 44px) 12px 40px!important}.r38-mobilebar{display:flex;align-items:center;justify-content:space-between;background:#101b2d;color:#fff;margin:-18px -12px 15px;padding:12px 14px}.r38-mobile-brand{font-size:13px;font-weight:800}.r38-mobile-menu{font-size:19px}.r38-title{font-size:23px}.r38-subtitle{font-size:11.5px}.r38-head-actions{display:none}.r38-panel{padding:12px 11px}.r38-section-title{font-size:15px}.r38-hero-grid{grid-template-columns:1fr}.r38-hero-card{min-height:255px}.r38-hero-main{grid-template-columns:1fr;gap:10px;min-height:auto}.r38-hero-side{justify-content:flex-start;text-align:left}.r38-side-copy{max-width:none}.r38-callout{margin-top:14px;height:auto;min-height:auto}.r38-card-title{font-size:14px}.r38-big{font-size:37px;white-space:nowrap}.r38-signal-main{font-size:31px;white-space:nowrap}.r38-risk-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.r38-market-table{grid-template-columns:repeat(2,minmax(0,1fr))}.r38-market-col,.r38-market-col:nth-child(3){border-right:1px solid #e7ebf0}.r38-market-col:nth-child(even){border-right:0}.r38-market-col:nth-child(n+3){border-top:1px solid #e7ebf0}.r38-recession{gap:5px}.r38-metric{min-height:80px;padding:9px}.r38-spark{width:58px;flex-basis:58px}.r38-info-tip{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.98);width:min(340px,86vw);font-size:13px;padding:14px 15px;border-radius:14px;box-shadow:0 18px 55px rgba(0,0,0,.20)}.r38-info:hover .r38-info-tip,.r38-info:focus .r38-info-tip{transform:translate(-50%,-50%) scale(1)}.r38-footer{text-align:left}}
 </style>""", unsafe_allow_html=True)
-# ---------- v3.38.8 redesigned frontend ----------
+# ---------- v3.38.9 redesigned frontend ----------
 import math
 
 def _esc(x): return html.escape(str(x))
@@ -939,23 +939,21 @@ _theme_q='dark' if _theme=='dark' else 'light'
 _dashboard_active=' active' if _view=='dashboard' else ''
 _heatmap_active=' active' if _view=='heatmap' else ''
 _theme_next='light' if _theme=='dark' else 'dark'
-sidebar='''<aside class="r38-sidebar"><div class="r38-brand"><span class="r38-brand-mark"><svg viewBox="0 0 32 38" fill="none"><path d="M16 2.5 27 7v8.4c0 8.1-4.4 14.4-11 18.1C9.4 29.8 5 23.5 5 15.4V7L16 2.5Z" stroke="#E7EDF7" stroke-width="1.5"/><path d="m11 18 3 3 7-8" stroke="#E7EDF7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Market Risk<br>Monitor</span></div><nav class="r38-nav"><a class="r38-nav-item'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''"><span class="r38-nav-icon">⌂</span>대시보드</a><a class="r38-nav-item'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''"><span class="r38-nav-icon">▦</span>S&P500 히트맵</a><div class="r38-nav-item"><span class="r38-nav-icon">◉</span>위험지수</div><div class="r38-nav-item"><span class="r38-nav-icon">≋</span>시장 상태</div><div class="r38-nav-item"><span class="r38-nav-icon">▣</span>데이터</div><div class="r38-nav-item"><span class="r38-nav-icon">♢</span>알림</div><div class="r38-nav-item"><span class="r38-nav-icon">▤</span>리포트</div><div class="r38-nav-item"><span class="r38-nav-icon">⚙</span>설정</div><div class="r38-nav-item"><span class="r38-nav-icon">?</span>도움말</div></nav><div class="r38-side-bottom"><div class="r38-side-title">최종 업데이트</div><div>'''+now_kst.strftime('%Y.%m.%d %H:%M')+'''</div><div>(한국시간 기준)</div><a class="r38-toggle" href="?view='''+_view+'''&theme='''+_theme_next+'''">다크 모드 <span class="r38-toggle-pill'''+(' on' if _theme=='dark' else '')+'''"></span></a></div></aside><div class="r38-mobilebar"><div class="r38-mobile-brand">Market Risk Monitor</div><div class="r38-mobile-menu">☰</div></div>'''
+sidebar='''<aside class="r38-sidebar"><div class="r38-brand"><span class="r38-brand-mark"><svg viewBox="0 0 32 38" fill="none"><path d="M16 2.5 27 7v8.4c0 8.1-4.4 14.4-11 18.1C9.4 29.8 5 23.5 5 15.4V7L16 2.5Z" stroke="#E7EDF7" stroke-width="1.5"/><path d="m11 18 3 3 7-8" stroke="#E7EDF7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Market Risk<br>Monitor</span></div><nav class="r38-nav"><a class="r38-nav-item'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">⌂</span>대시보드</a><a class="r38-nav-item'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▦</span>S&P500 히트맵</a><div class="r38-nav-item"><span class="r38-nav-icon">◉</span>위험지수</div><div class="r38-nav-item"><span class="r38-nav-icon">≋</span>시장 상태</div><div class="r38-nav-item"><span class="r38-nav-icon">▣</span>데이터</div><div class="r38-nav-item"><span class="r38-nav-icon">♢</span>알림</div><div class="r38-nav-item"><span class="r38-nav-icon">▤</span>리포트</div><div class="r38-nav-item"><span class="r38-nav-icon">⚙</span>설정</div><div class="r38-nav-item"><span class="r38-nav-icon">?</span>도움말</div></nav><div class="r38-side-bottom"><div class="r38-side-title">최종 업데이트</div><div>'''+now_kst.strftime('%Y.%m.%d %H:%M')+'''</div><div>(한국시간 기준)</div><a class="r38-toggle" href="?view='''+_view+'''&theme='''+_theme_next+'''" target="_self">다크 모드 <span class="r38-toggle-pill'''+(' on' if _theme=='dark' else '')+'''"></span></a></div></aside><div class="r38-mobilebar"><div class="r38-mobile-brand">Market Risk Monitor</div><div class="r38-mobile-menu">☰</div></div>'''
 st.markdown(sidebar,unsafe_allow_html=True)
-st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.38.8</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
+st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.38.9</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
 
 refresh_indicator()
 
 if _view=="heatmap":
     st.markdown(
         '<section class="r38-panel"><div class="r38-section-title">S&amp;P500 히트맵</div>'
-        '<div class="r38-note">TradingView 공식 Stock Heatmap 위젯 · 사이드바에서 선택할 때만 불러옵니다.</div></section>',
+        '<div class="r38-note">TradingView 공식 Stock Heatmap · 사이드바에서 선택할 때만 불러옵니다.</div></section>',
         unsafe_allow_html=True
     )
-    heatmap_html = '''<div class="tradingview-widget-container" style="height:760px;width:100%">
-      <div class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
-      <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank">S&P 500 heatmap by TradingView</a></div>
-      <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js" async>
-      {
+    import json as _json
+    import urllib.parse as _urlparse
+    _tv_config = {
         "exchanges": [],
         "dataSource": "SPX500",
         "grouping": "sector",
@@ -963,18 +961,26 @@ if _view=="heatmap":
         "blockColor": "change",
         "locale": "kr",
         "symbolUrl": "",
-        "colorTheme": "__THEME__",
-        "hasTopBar": true,
-        "isDataSetEnabled": true,
-        "isZoomEnabled": true,
-        "hasSymbolTooltip": true,
-        "isMonoSize": false,
+        "colorTheme": "dark" if _theme=="dark" else "light",
+        "hasTopBar": True,
+        "isDataSetEnabled": True,
+        "isZoomEnabled": True,
+        "hasSymbolTooltip": True,
+        "isMonoSize": False,
         "width": "100%",
         "height": "100%"
-      }
-      </script>
-    </div>'''.replace("__THEME__", "dark" if _theme=="dark" else "light")
-    components.html(heatmap_html,height=790,scrolling=False)
+    }
+    _cfg = _urlparse.quote(_json.dumps(_tv_config, separators=(",", ":")))
+    _src = "https://s.tradingview.com/embed-widget/stock-heatmap/?locale=kr#" + _cfg
+    _iframe = f"""<iframe
+        src="{_src}"
+        title="S&P500 Stock Heatmap"
+        style="display:block;width:100%;height:760px;border:0;border-radius:12px;background:transparent;"
+        loading="eager"
+        referrerpolicy="origin-when-cross-origin"
+        allowfullscreen
+    ></iframe>"""
+    components.html(_iframe, height=780, scrolling=False)
     st.stop()
 
 _structure_count=int(structure.get('count',0) or 0); _structure_raw=structure.get('level','정상')
@@ -1086,4 +1092,4 @@ with st.expander('세부 데이터 및 계산 기준'):
     st.write('경기: 실업률 30% + Sahm Rule 35% + 신규 실업수당 35%.')
     st.write('물가: CPI 25% + 근원 CPI 35% + 근원 PCE 40%.')
     st.write('데이터 공급자는 내부 표준 키와 분리되어 향후 실시간 API로 교체하기 쉽도록 유지합니다.')
-st.markdown(f'<div class="r38-footer">Risk Monitor 3.38.8 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
+st.markdown(f'<div class="r38-footer">Risk Monitor 3.38.9 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
