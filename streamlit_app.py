@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 st.set_page_config(page_title="미국 증시 위험 모니터", page_icon="🇺🇸", layout="wide")
 
-# v3.40.2 UI state must be initialized before any theme/navigation rendering.
+# v3.40.3 UI state must be initialized before any theme/navigation rendering.
 _qp = st.query_params
 _view = str(_qp.get("view", "dashboard"))
 _theme = str(_qp.get("theme", "light"))
@@ -103,7 +103,7 @@ div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:
 .tm-viewport{width:100%;overflow:auto;border:1px solid #dde3eb;border-radius:12px;background:#eef1f4;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y pinch-zoom}
 .tm-wrap{position:relative;width:100%;height:min(72vw,760px);min-height:600px;overflow:hidden;background:#eef1f4}
 .tm-tile{position:absolute;box-sizing:border-box;border:1px solid rgba(255,255,255,.72);padding:5px 6px;overflow:hidden;display:flex;flex-direction:column;justify-content:center;outline:none;cursor:pointer}
-.tm-tile:focus{z-index:8;box-shadow:inset 0 0 0 2px rgba(255,255,255,.9)}
+.tm-tile:focus{z-index:9;box-shadow:inset 0 0 0 2px rgba(255,255,255,.95)}
 .tm-symbol{font-size:10px;font-weight:900;line-height:1.02;white-space:nowrap}
 .tm-change{margin-top:2px;font-size:8px;font-weight:850;line-height:1.02;white-space:nowrap}
 .tm-name{margin-top:2px;font-size:7px;font-weight:650;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -113,13 +113,16 @@ div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:
 .tm-tile.xs .tm-symbol,.tm-tile.xs .tm-change,.tm-tile.xs .tm-name{display:none}
 .tm-tile:focus::after{
   content:attr(data-symbol) " · " attr(data-name) "\\A" attr(data-change) "   현재가 " attr(data-price) "\\A" "S&P500 비중 " attr(data-weight);
-  white-space:pre;position:fixed;z-index:9999;left:50%;bottom:22px;transform:translateX(-50%);
-  min-width:240px;max-width:calc(100vw - 32px);box-sizing:border-box;padding:12px 14px;border-radius:10px;
-  background:rgba(15,23,34,.94);color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.25);
-  font:700 12px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-align:left;pointer-events:none
+  white-space:pre;position:absolute;z-index:9999;left:4px;top:4px;transform:none;
+  min-width:220px;max-width:min(290px,calc(100vw - 36px));box-sizing:border-box;padding:10px 12px;border-radius:9px;
+  background:rgba(15,23,34,.95);color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.26);
+  font:750 11.5px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-align:left;pointer-events:none
 }
-.tm-sector-label{position:absolute;z-index:5;pointer-events:none;padding:3px 5px;border-radius:4px;background:rgba(10,18,28,.74);color:#fff;font-size:8.5px;font-weight:800;line-height:1}
-.tm-sector-label span{font-weight:700;opacity:.85}
+.tm-sector-label{position:absolute;z-index:6;pointer-events:none;padding:5px 8px;border-radius:5px;background:rgba(10,18,28,.82);color:#fff;font-size:13px;font-weight:900;line-height:1.05;letter-spacing:-.15px;box-shadow:0 1px 4px rgba(0,0,0,.18)}
+.tm-sector-label span{font-weight:800;opacity:.9;font-size:10px;margin-left:2px}
+.tm-sector-outline{position:absolute;z-index:5;pointer-events:none;box-sizing:border-box;border:3px solid rgba(255,255,255,.96);box-shadow:inset 0 0 0 1px rgba(17,26,38,.18)}
+.r38-dark .tm-sector-outline{border-color:rgba(245,248,252,.9);box-shadow:inset 0 0 0 1px rgba(0,0,0,.5)}
+
 .r38-dark .hm-summary{background:#171e28;border-color:#2a3442}
 .r38-dark .hm-summary strong{color:#f2f5f9}.r38-dark .hm-summary span,.r38-dark .tm-help{color:#9aa7b6}
 .r38-dark .tm-viewport,.r38-dark .tm-wrap{background:#111823;border-color:#2a3442}
@@ -130,8 +133,8 @@ div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:
   .tm-help{font-size:10px;line-height:1.45}
   .tm-viewport{height:72vh;min-height:540px}
   .tm-wrap{width:1180px;height:760px;min-height:760px;max-height:none}
-  .tm-sector-label{font-size:8px}
-  .tm-tile:focus::after{bottom:16px;min-width:260px}
+  .tm-sector-label{font-size:11px;padding:4px 7px}
+  .tm-tile:focus::after{left:4px;top:4px;min-width:210px;max-width:260px;font-size:11px}
 }
 
 </style>""", unsafe_allow_html=True)
@@ -482,7 +485,11 @@ def _heatmap_html(snapshot,dark=False):
                 f'</div>'
             )
 
-        if sw*sh>=175:
+        blocks.append(
+            f'<div class="tm-sector-outline" '
+            f'style="left:{sx:.4f}%;top:{sy:.4f}%;width:{sw:.4f}%;height:{sh:.4f}%"></div>'
+        )
+        if sw*sh>=120:
             avg=float(np.mean(sec_changes)) if sec_changes else np.nan
             avg_txt=f"{avg:+.2f}%" if np.isfinite(avg) else ""
             blocks.append(
@@ -508,7 +515,7 @@ def _heatmap_html(snapshot,dark=False):
 CAPE_URL="https://www.multpl.com/shiller-pe/table/by-month"
 
 
-# v3.40.2 source refresh TTLs.
+# v3.40.3 source refresh TTLs.
 # UI reruns never need to hit the network merely because the user changed a view/theme.
 SERIES_TTL_SECONDS={
     "EFFR":1800,
@@ -1228,7 +1235,7 @@ def delta_value(a,b):
     return d,"— 0.0","flat"
 
 
-# v3.40.2 adaptive dashboard refinement — Streamlit engine + custom HTML/CSS skin.
+# v3.40.3 adaptive dashboard refinement — Streamlit engine + custom HTML/CSS skin.
 st.markdown("""<style>
 html,body,.stApp{background:#f5f7fb!important;color:#171b23}
 header[data-testid="stHeader"]{background:transparent!important}
@@ -1272,7 +1279,7 @@ div[data-testid="stButton"] button{border:1px solid #dfe4eb!important;background
 }
 @media(max-width:780px){.r38-sidebar{display:none}.block-container{padding:calc(env(safe-area-inset-top,0px) + 44px) 12px 40px!important}.r38-mobilebar{display:flex;align-items:center;justify-content:space-between;background:#101b2d;color:#fff;margin:-18px -12px 15px;padding:12px 14px}.r38-mobile-brand{font-size:13px;font-weight:800}.r38-mobile-menu{font-size:19px}.r38-title{font-size:23px}.r38-subtitle{font-size:11.5px}.r38-head-actions{display:none}.r38-panel{padding:12px 11px}.r38-section-title{font-size:15px}.r38-hero-grid{grid-template-columns:1fr}.r38-hero-card{min-height:255px}.r38-hero-main{grid-template-columns:1fr;gap:10px;min-height:auto}.r38-hero-side{justify-content:flex-start;text-align:left}.r38-side-copy{max-width:none}.r38-callout{margin-top:14px;height:auto;min-height:auto}.r38-card-title{font-size:14px}.r38-big{font-size:37px;white-space:nowrap}.r38-signal-main{font-size:31px;white-space:nowrap}.r38-risk-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.r38-market-table{grid-template-columns:repeat(2,minmax(0,1fr))}.r38-market-col,.r38-market-col:nth-child(3){border-right:1px solid #e7ebf0}.r38-market-col:nth-child(even){border-right:0}.r38-market-col:nth-child(n+3){border-top:1px solid #e7ebf0}.r38-recession{gap:5px}.r38-metric{min-height:80px;padding:9px}.r38-spark{width:58px;flex-basis:58px}.r38-info-tip{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.98);width:min(340px,86vw);font-size:13px;padding:14px 15px;border-radius:14px;box-shadow:0 18px 55px rgba(0,0,0,.20)}.r38-info:hover .r38-info-tip,.r38-info:focus .r38-info-tip{transform:translate(-50%,-50%) scale(1)}.r38-footer{text-align:left}}
 </style>""", unsafe_allow_html=True)
-# ---------- v3.40.2 redesigned frontend ----------
+# ---------- v3.40.3 redesigned frontend ----------
 import math
 
 def _esc(x): return html.escape(str(x))
@@ -1376,7 +1383,7 @@ _heatmap_active=' active' if _view=='heatmap' else ''
 _theme_next='light' if _theme=='dark' else 'dark'
 sidebar='''<aside class="r38-sidebar"><div class="r38-brand"><span class="r38-brand-mark"><svg viewBox="0 0 32 38" fill="none"><path d="M16 2.5 27 7v8.4c0 8.1-4.4 14.4-11 18.1C9.4 29.8 5 23.5 5 15.4V7L16 2.5Z" stroke="#E7EDF7" stroke-width="1.5"/><path d="m11 18 3 3 7-8" stroke="#E7EDF7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Market Risk<br>Monitor</span></div><nav class="r38-nav"><a class="r38-nav-item'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">⌂</span>대시보드</a><a class="r38-nav-item'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▦</span>S&P500 시장 맵</a><div class="r38-nav-item"><span class="r38-nav-icon">◉</span>위험지수</div><div class="r38-nav-item"><span class="r38-nav-icon">≋</span>시장 상태</div><div class="r38-nav-item"><span class="r38-nav-icon">▣</span>데이터</div><div class="r38-nav-item"><span class="r38-nav-icon">♢</span>알림</div><div class="r38-nav-item"><span class="r38-nav-icon">▤</span>리포트</div><div class="r38-nav-item"><span class="r38-nav-icon">⚙</span>설정</div><div class="r38-nav-item"><span class="r38-nav-icon">?</span>도움말</div></nav><div class="r38-side-bottom"><div class="r38-side-title">최종 업데이트</div><div>'''+now_kst.strftime('%Y.%m.%d %H:%M')+'''</div><div>(한국시간 기준)</div><a class="r38-toggle" href="?view='''+_view+'''&theme='''+_theme_next+'''" target="_self">다크 모드 <span class="r38-toggle-pill'''+(' on' if _theme=='dark' else '')+'''"></span></a></div></aside><div class="r38-mobilebar"><div class="r38-mobile-brand">Market Risk Monitor</div><div class="r38-mobile-menu">☰</div></div>'''
 st.markdown(sidebar,unsafe_allow_html=True)
-st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.40.2</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
+st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.40.3</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
 
 refresh_indicator()
 
@@ -1511,4 +1518,4 @@ with st.expander('세부 데이터 및 계산 기준'):
     st.write('경기: 실업률 30% + Sahm Rule 35% + 신규 실업수당 35%.')
     st.write('물가: CPI 25% + 근원 CPI 35% + 근원 PCE 40%.')
     st.write('데이터 공급자는 내부 표준 키와 분리되어 향후 실시간 API로 교체하기 쉽도록 유지합니다.')
-st.markdown(f'<div class="r38-footer">Risk Monitor 3.40.2 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
+st.markdown(f'<div class="r38-footer">Risk Monitor 3.40.3 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
