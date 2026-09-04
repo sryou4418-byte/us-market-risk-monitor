@@ -229,35 +229,46 @@ def _refresh_series(name,sid):
 def _fetch_yahoo_symbol(ticker):
     enc=quote(ticker,safe="")
     headers={"User-Agent":"Mozilla/5.0"}
-    url=f"https://query1.finance.yahoo.com/v8/finance/chart/{enc}?range=5d&interval=1m&includePrePost=false"
-    r=requests.get(url,headers=headers,timeout=(3,6)); r.raise_for_status()
-    result=r.json().get("chart",{}).get("result") or []
-    if not result: raise ValueError(f"{ticker}: Yahoo 데이터 없음")
-    meta=result[0].get("meta",{})
-    cur=meta.get("regularMarketPrice")
-    prev=meta.get("chartPreviousClose",meta.get("previousClose"))
-    if cur is None: raise ValueError(f"{ticker}: 현재값 없음")
-    quote=result[0].get("indicators",{}).get("quote",[{}])[0]
-    intraday=[float(x) for x in (quote.get("close") or []) if x is not None]
-    if prev is None:
-        url2=f"https://query1.finance.yahoo.com/v8/finance/chart/{enc}?range=10d&interval=1d"
-        r2=requests.get(url2,headers=headers,timeout=(3,6)); r2.raise_for_status()
-        rr=(r2.json().get("chart",{}).get("result") or [None])[0]
-        closes=[] if rr is None else (rr.get("indicators",{}).get("quote",[{}])[0].get("close") or [])
-        closes=[float(x) for x in closes if x is not None]
-        prev=closes[-2] if len(closes)>=2 else (closes[-1] if closes else np.nan)
-    return {"value":float(cur),"prev":float(prev) if prev is not None else np.nan,"time":time.time(),"spark":intraday[-60:]}
+    attempts=[
+        ("query1.finance.yahoo.com","5d","1m"),
+        ("query2.finance.yahoo.com","5d","5m"),
+        ("query1.finance.yahoo.com","1mo","15m"),
+        ("query2.finance.yahoo.com","1mo","1d"),
+    ]
+    last_error=None
+    for host,rng,interval in attempts:
+        try:
+            url=f"https://{host}/v8/finance/chart/{enc}?range={rng}&interval={interval}&includePrePost=false"
+            r=requests.get(url,headers=headers,timeout=(3,6)); r.raise_for_status()
+            result=r.json().get("chart",{}).get("result") or []
+            if not result: raise ValueError(f"{ticker}: Yahoo 데이터 없음")
+            row=result[0]; meta=row.get("meta",{})
+            closes=[float(x) for x in (row.get("indicators",{}).get("quote",[{}])[0].get("close") or []) if x is not None]
+            cur=meta.get("regularMarketPrice")
+            if cur is None and closes: cur=closes[-1]
+            prev=meta.get("chartPreviousClose",meta.get("previousClose"))
+            if prev is None and len(closes)>=2: prev=closes[-2]
+            if cur is None: raise ValueError(f"{ticker}: 현재값 없음")
+            return {"value":float(cur),"prev":float(prev) if prev is not None else np.nan,"time":time.time(),"spark":closes[-60:],"stale":False,"interval":interval}
+        except Exception as e:
+            last_error=e
+    raise ValueError(f"{ticker}: Yahoo 요청 실패 ({last_error})")
 
 
 def _refresh_fx():
     tickers={"원/달러":"USDKRW=X","엔/달러":"USDJPY=X","달러인덱스":"DX-Y.NYB","WTI 유가":"CL=F"}
-    snap={"updated":time.time(),"source":"Yahoo Finance","items":{}}
-    errors=[]
+    previous=_read_fx().get("items",{})
+    snap={"updated":time.time(),"source":"Yahoo Finance","items":dict(previous)}
+    errors=[]; successes=0
     with ThreadPoolExecutor(max_workers=4) as ex:
         futs={ex.submit(_fetch_yahoo_symbol,t):name for name,t in tickers.items()}
         for f,name in [(f,n) for f,n in futs.items()]:
-            try: snap["items"][name]=f.result()
-            except Exception as e: errors.append(f"{name}: {e}")
+            try:
+                snap["items"][name]=f.result(); successes+=1
+            except Exception as e:
+                errors.append(f"{name}: {e}")
+                if name in snap["items"]:
+                    snap["items"][name]=dict(snap["items"][name]); snap["items"][name]["stale"]=True
     if snap["items"]:
         ROOT_CACHE.mkdir(parents=True,exist_ok=True)
         tmp=FX_CACHE.with_suffix(".tmp"); tmp.write_text(json.dumps(snap,ensure_ascii=False),encoding="utf-8"); tmp.replace(FX_CACHE)
@@ -738,7 +749,7 @@ if prev_snapshot is not None:
     prev_rapid=rapid_alert(prev_fast,{})
     prev_overall,_=apply_risk_floors(prev_snapshot["overall"],prev_structure,prev_rapid,prev_data["S&P500"],prev_data["VIX"],prev_fast.get("신용",np.nan))
 
-# v3.38.1 full dashboard redesign — Streamlit engine + custom HTML/CSS skin.
+# v3.38.2 full dashboard redesign — Streamlit engine + custom HTML/CSS skin.
 st.markdown("""<style>
 html,body,.stApp{background:#f5f7fb!important;color:#171b23}
 header[data-testid="stHeader"]{background:transparent!important}
@@ -748,14 +759,14 @@ header[data-testid="stHeader"]{background:transparent!important}
 .r38-mobilebar{display:none}.r38-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}.r38-title{font-size:27px;font-weight:850;letter-spacing:-.045em;line-height:1.18}.r38-subtitle{font-size:13.5px;color:#69717d;margin-top:6px}.r38-credit{font-size:11px;color:#939aa5;margin-top:3px}.r38-head-actions{display:flex;gap:10px}.r38-action{height:42px;border:1px solid #dfe4eb;border-radius:8px;background:#fff;padding:0 15px;display:flex;align-items:center;font-size:13px;font-weight:650;color:#3c4654}
 .r38-panel{background:#fff;border:1px solid #dde3eb;border-radius:12px;padding:17px;margin-bottom:15px;box-shadow:0 1px 2px rgba(25,38,58,.025)}.r38-section-title{display:flex;align-items:center;gap:7px;font-size:16px;font-weight:820;color:#202631;margin-bottom:15px}
 .r38-info{position:relative;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border:1px solid #9da5af;border-radius:50%;font-size:9px;color:#7d8590;font-weight:800;cursor:help;outline:none;flex:0 0 15px}.r38-info:hover,.r38-info:focus{background:#eef2f7;color:#37404b;border-color:#66717e}.r38-info-tip{visibility:hidden;opacity:0;pointer-events:none;position:absolute;z-index:9999;left:50%;top:23px;transform:translateX(-50%) translateY(-3px);width:min(330px,78vw);padding:12px 13px;border:1px solid #dfe4ea;border-radius:11px;background:#fff;box-shadow:0 12px 32px rgba(13,24,40,.15);font-size:12.5px;font-weight:550;line-height:1.55;color:#414955;text-align:left;white-space:normal;transition:opacity .12s ease,transform .12s ease}.r38-info:hover .r38-info-tip,.r38-info:focus .r38-info-tip{visibility:visible;opacity:1;transform:translateX(-50%) translateY(0)}
-.r38-hero-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}.r38-hero-card{position:relative;min-height:274px;border:1px solid #e3e7ed;border-radius:11px;padding:17px 17px 16px;box-sizing:border-box;background:#fff;overflow:visible}.r38-hero-card.danger{border-color:#f0dddd}.r38-hero-card.warn{border-color:#f0e4cf}.r38-card-title{font-size:15px;font-weight:800;color:#3a4049;display:flex;align-items:center;gap:6px}.r38-horizon{font-size:11.5px;color:#8b929d;margin-top:4px}.r38-hero-main{display:grid;grid-template-columns:minmax(0,1fr) 150px;align-items:center;gap:14px;margin-top:16px;min-height:112px}.r38-big{font-size:41px;font-weight:850;line-height:1;letter-spacing:-.05em}.r38-big.red{color:#d92f3b}.r38-big.orange{color:#d77b00}.r38-unit{font-size:13px;font-weight:650;color:#555d68;margin-left:4px}.r38-badge{display:inline-flex;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:800;margin-top:9px}.r38-badge.red{color:#fff;background:#e83d49}.r38-badge.orange{color:#fff;background:#f09a18}.r38-badge.green{color:#fff;background:#2ca675}.r38-badge.gray{color:#5e6672;background:#eef1f5}.r38-delta-label{font-size:11px;color:#737b87;margin-top:13px}.r38-delta{font-size:12.5px;margin-top:4px;font-weight:750}.r38-up{color:#e03b45}.r38-down{color:#2f70c9}.r38-flat{color:#7b8490}.r38-gauge{width:150px;height:92px;justify-self:end}.r38-gauge svg{width:100%;height:100%}.r38-gauge-label{font-size:8px;fill:#8b929d}.r38-floor-box{width:142px;min-height:92px;justify-self:end;border:1px solid #e5e9ef;border-radius:12px;background:#fafbfc;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:10px;box-sizing:border-box}.r38-floor-label{font-size:10.5px;color:#7a838f;font-weight:700}.r38-floor-value{font-size:28px;font-weight:850;line-height:1.1;margin-top:5px;color:#343a43}.r38-floor-value.orange{color:#d77b00}.r38-floor-value.red{color:#d92f3b}.r38-signal-main{font-size:34px;font-weight:850;line-height:1.05;letter-spacing:-.035em;color:#252b34}.r38-signal-meta{font-size:12px;color:#707985;margin-top:8px;font-weight:700}.r38-callout{position:absolute;left:11px;right:11px;bottom:11px;border-radius:8px;padding:11px 12px;font-size:11.5px;line-height:1.5;background:#fff6f6;border:1px solid #f5dede;color:#5c3b3e}.r38-callout.warn{background:#fff9ef;border-color:#f3e4c9;color:#69523a}.r38-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}.r38-chip{display:inline-flex;padding:4px 8px;border-radius:999px;background:#fff0f0;border:1px solid #f3d3d3;color:#c33b42;font-size:10.5px;font-weight:750}.r38-chip.warn{background:#fff5e7;border-color:#f0ddbd;color:#a76600}.r38-interpret{margin-top:11px;padding:11px 13px;border-radius:8px;background:#f8fafc;border:1px solid #e7ebf0;font-size:12px;line-height:1.55;color:#555e69}
+.r38-hero-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}.r38-hero-card{position:relative;min-height:274px;border:1px solid #e3e7ed;border-radius:11px;padding:17px 17px 16px;box-sizing:border-box;background:#fff;overflow:visible}.r38-hero-card.danger{border-color:#f0dddd}.r38-hero-card.warn{border-color:#f0e4cf}.r38-card-title{font-size:15px;font-weight:800;color:#3a4049;display:flex;align-items:center;gap:6px}.r38-horizon{font-size:11.5px;color:#8b929d;margin-top:4px}.r38-hero-main{display:grid;grid-template-columns:minmax(0,1fr) 150px;align-items:center;gap:14px;margin-top:16px;min-height:112px}.r38-big{font-size:41px;font-weight:850;line-height:1;letter-spacing:-.05em}.r38-big.red{color:#d92f3b}.r38-big.orange{color:#d77b00}.r38-unit{font-size:13px;font-weight:650;color:#555d68;margin-left:4px}.r38-badge{display:inline-flex;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:800;margin-top:9px}.r38-badge.red{color:#fff;background:#e83d49}.r38-badge.orange{color:#fff;background:#f09a18}.r38-badge.green{color:#fff;background:#2ca675}.r38-badge.gray{color:#5e6672;background:#eef1f5}.r38-delta-label{font-size:11px;color:#737b87;margin-top:13px}.r38-delta{font-size:12.5px;margin-top:4px;font-weight:750}.r38-up{color:#e03b45}.r38-down{color:#2f70c9}.r38-flat{color:#7b8490}.r38-gauge-wrap{width:150px;justify-self:end;align-self:center}.r38-gauge-delta{text-align:center;margin-bottom:3px}.r38-gauge-delta .r38-delta-label{margin-top:0}.r38-gauge-delta .r38-delta{margin-top:2px}.r38-gauge{width:150px;height:92px;justify-self:end}.r38-gauge svg{width:100%;height:100%}.r38-gauge-label{font-size:8px;fill:#8b929d}.r38-floor-box{width:142px;min-height:92px;justify-self:end;border:1px solid #e5e9ef;border-radius:12px;background:#fafbfc;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:10px;box-sizing:border-box}.r38-floor-label{font-size:10.5px;color:#7a838f;font-weight:700}.r38-floor-value{font-size:28px;font-weight:850;line-height:1.1;margin-top:5px;color:#343a43}.r38-floor-value.orange{color:#d77b00}.r38-floor-value.red{color:#d92f3b}.r38-hero-main.signal-only{display:block;min-height:112px;padding-top:8px}.r38-signal-main{font-size:34px;font-weight:850;line-height:1.05;letter-spacing:-.035em;color:#252b34}.r38-signal-meta{font-size:12px;color:#707985;margin-top:8px;font-weight:700}.r38-callout{position:absolute;left:11px;right:11px;bottom:11px;border-radius:8px;padding:11px 12px;font-size:11.5px;line-height:1.5;background:#fff6f6;border:1px solid #f5dede;color:#5c3b3e}.r38-callout.warn{background:#fff9ef;border-color:#f3e4c9;color:#69523a}.r38-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}.r38-chip{display:inline-flex;padding:4px 8px;border-radius:999px;background:#fff0f0;border:1px solid #f3d3d3;color:#c33b42;font-size:10.5px;font-weight:750}.r38-chip.warn{background:#fff5e7;border-color:#f0ddbd;color:#a76600}.r38-interpret{margin-top:11px;padding:11px 13px;border-radius:8px;background:#f8fafc;border:1px solid #e7ebf0;font-size:12px;line-height:1.55;color:#555e69}
 .r38-risk-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px}.r38-risk-card{border:1px solid #e2e7ed;border-radius:9px;padding:14px 11px 12px;min-height:146px}.r38-risk-top{display:flex;align-items:center;gap:8px}.r38-risk-icon{width:28px;height:28px;border-radius:7px;background:#f2f6ff;border:1px solid #dfe7fa;display:flex;align-items:center;justify-content:center;color:#345ec8;font-size:14px;font-weight:800}.r38-risk-name{font-size:12px;font-weight:760;color:#3d4550;display:flex;align-items:center;gap:5px}.r38-risk-numrow{display:flex;align-items:center;justify-content:space-between;margin-top:15px}.r38-risk-score{font-size:25px;font-weight:850}.r38-mini-state{font-size:10px;font-weight:800;border-radius:999px;padding:4px 7px;background:#fff1f1;color:#d63e46}.r38-mini-state.mid{background:#fff7df;color:#c98300}.r38-mini-state.low{background:#edf8f3;color:#24855e}.r38-segments{display:flex;gap:3px;margin-top:13px}.r38-seg{height:4px;flex:1;border-radius:99px;background:#e8ebef}.r38-seg.on-red{background:#ea3944}.r38-seg.on-orange{background:#f0a018}.r38-seg.on-green{background:#3da77a}.r38-risk-foot,.r38-note{font-size:10.5px;color:#8c949f;margin-top:10px}
 .r38-market-table{border:1px solid #e1e6ed;border-radius:9px;overflow:hidden;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#fff}.r38-market-col{min-width:0;border-right:1px solid #e7ebf0}.r38-market-col:last-child{border-right:0}.r38-col-head{height:38px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;background:#fafbfc;border-bottom:1px solid #e7ebf0}.r38-metric{min-height:84px;padding:10px 11px 8px;border-bottom:1px solid #edf0f3}.r38-metric:last-child{border-bottom:0}.r38-metric-name{font-size:10.5px;color:#555e69;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.r38-metric-row{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin-top:4px}.r38-metric-value{font-size:16px;font-weight:820;white-space:nowrap}.r38-metric-delta{font-size:10px;margin-top:3px;font-weight:700;white-space:nowrap}.r38-spark{width:74px;height:30px;flex:0 0 74px}.r38-spark svg{width:100%;height:30px}.r38-recession{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.r38-recession-card{background:#f8fafc;border:1px solid #e7ebf0;border-radius:8px;padding:10px 11px}.r38-recession-name{font-size:10.5px;color:#808895}.r38-recession-value{font-size:17px;font-weight:820;margin-top:3px}
 div[data-testid="stButton"] button{border:1px solid #dfe4eb!important;background:#fff!important;color:#3e4651!important;border-radius:7px!important;font-size:12px!important;font-weight:700!important;min-height:36px!important;box-shadow:none!important}[data-testid="stExpander"]{border:1px solid #dde3eb!important;border-radius:10px!important;background:#fff!important}.r38-footer{font-size:10.5px;color:#9299a3;text-align:right;margin-top:12px}
 @media(max-width:1050px){.block-container{padding-left:176px!important;padding-right:18px!important}.r38-risk-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.r38-market-table{grid-template-columns:repeat(3,minmax(0,1fr))}.r38-market-col:nth-child(3){border-right:0}.r38-market-col:nth-child(n+4){border-top:1px solid #e7ebf0}}
-@media(max-width:780px){.r38-sidebar{display:none}.block-container{padding:calc(env(safe-area-inset-top,0px) + 18px) 12px 40px!important}.r38-mobilebar{display:flex;align-items:center;justify-content:space-between;background:#101b2d;color:#fff;margin:-18px -12px 15px;padding:12px 14px}.r38-mobile-brand{font-size:13px;font-weight:800}.r38-mobile-menu{font-size:19px}.r38-title{font-size:23px}.r38-subtitle{font-size:11.5px}.r38-head-actions{display:none}.r38-panel{padding:12px 11px}.r38-section-title{font-size:15px}.r38-hero-grid{grid-template-columns:1fr}.r38-hero-card{min-height:255px}.r38-hero-main{grid-template-columns:minmax(0,1fr) 128px;gap:8px}.r38-gauge{width:128px;height:80px}.r38-floor-box{width:122px;min-height:82px}.r38-card-title{font-size:14px}.r38-big{font-size:37px}.r38-signal-main{font-size:31px}.r38-risk-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.r38-market-table{grid-template-columns:repeat(2,minmax(0,1fr))}.r38-market-col,.r38-market-col:nth-child(3){border-right:1px solid #e7ebf0}.r38-market-col:nth-child(even){border-right:0}.r38-market-col:nth-child(n+3){border-top:1px solid #e7ebf0}.r38-recession{gap:5px}.r38-metric{min-height:80px;padding:9px}.r38-spark{width:58px;flex-basis:58px}.r38-info-tip{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.98);width:min(340px,86vw);font-size:13px;padding:14px 15px;border-radius:14px;box-shadow:0 18px 55px rgba(0,0,0,.20)}.r38-info:hover .r38-info-tip,.r38-info:focus .r38-info-tip{transform:translate(-50%,-50%) scale(1)}.r38-footer{text-align:left}}
+@media(max-width:780px){.r38-sidebar{display:none}.block-container{padding:calc(env(safe-area-inset-top,0px) + 18px) 12px 40px!important}.r38-mobilebar{display:flex;align-items:center;justify-content:space-between;background:#101b2d;color:#fff;margin:-18px -12px 15px;padding:12px 14px}.r38-mobile-brand{font-size:13px;font-weight:800}.r38-mobile-menu{font-size:19px}.r38-title{font-size:23px}.r38-subtitle{font-size:11.5px}.r38-head-actions{display:none}.r38-panel{padding:12px 11px}.r38-section-title{font-size:15px}.r38-hero-grid{grid-template-columns:1fr}.r38-hero-card{min-height:255px}.r38-hero-main{grid-template-columns:minmax(0,1fr) 128px;gap:8px}.r38-gauge-wrap{width:128px}.r38-gauge{width:128px;height:80px}.r38-floor-box{width:122px;min-height:82px}.r38-card-title{font-size:14px}.r38-big{font-size:37px}.r38-signal-main{font-size:31px}.r38-risk-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.r38-market-table{grid-template-columns:repeat(2,minmax(0,1fr))}.r38-market-col,.r38-market-col:nth-child(3){border-right:1px solid #e7ebf0}.r38-market-col:nth-child(even){border-right:0}.r38-market-col:nth-child(n+3){border-top:1px solid #e7ebf0}.r38-recession{gap:5px}.r38-metric{min-height:80px;padding:9px}.r38-spark{width:58px;flex-basis:58px}.r38-info-tip{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.98);width:min(340px,86vw);font-size:13px;padding:14px 15px;border-radius:14px;box-shadow:0 18px 55px rgba(0,0,0,.20)}.r38-info:hover .r38-info-tip,.r38-info:focus .r38-info-tip{transform:translate(-50%,-50%) scale(1)}.r38-footer{text-align:left}}
 </style>""", unsafe_allow_html=True)
-# ---------- v3.38.1 redesigned frontend ----------
+# ---------- v3.38.2 redesigned frontend ----------
 import math
 
 def _esc(x): return html.escape(str(x))
@@ -805,14 +816,15 @@ def _fmt_series_metric(s, unit='%', decimals=2):
 
 def _fmt_fx_metric(name,decimals=2):
     item=fx.get(name,{})
-    v=item.get('value',np.nan); p=item.get('prev',np.nan)
+    v=item.get('value',np.nan); p=item.get('prev',np.nan); stale=bool(item.get('stale',False))
     if pd.isna(v): return 'N/A','', 'flat'
     val=f'{v:,.{decimals}f}'
-    if pd.isna(p) or p==0:return val,'직전값 없음','flat'
+    if pd.isna(p) or p==0:return val,('직전값 없음 · 지연' if stale else '직전값 없음'),'flat'
     ch=float(v-p); pct=ch/p*100
-    if ch>0:return val,f'▲ {abs(ch):,.{decimals}f} (+{abs(pct):.2f}%)','up'
-    if ch<0:return val,f'▼ {abs(ch):,.{decimals}f} (-{abs(pct):.2f}%)','down'
-    return val,f'— 0.{"0"*decimals} (0.00%)','flat'
+    suffix=' · 지연' if stale else ''
+    if ch>0:return val,f'▲ {abs(ch):,.{decimals}f} (+{abs(pct):.2f}%){suffix}','up'
+    if ch<0:return val,f'▼ {abs(ch):,.{decimals}f} (-{abs(pct):.2f}%){suffix}','down'
+    return val,f'— 0.{"0"*decimals} (0.00%){suffix}','flat'
 
 def _cpi_metric(s):
     yoy=s.pct_change(12)*100; cur=latest(yoy); prv=second(yoy)
@@ -850,7 +862,7 @@ _,delta_text,delta_class=delta_value(overall,prev_overall)
 now_kst=datetime.now(ZoneInfo('Asia/Seoul'))
 sidebar='''<aside class="r38-sidebar"><div class="r38-brand"><span class="r38-brand-mark"><svg viewBox="0 0 32 38" fill="none"><path d="M16 2.5 27 7v8.4c0 8.1-4.4 14.4-11 18.1C9.4 29.8 5 23.5 5 15.4V7L16 2.5Z" stroke="#E7EDF7" stroke-width="1.5"/><path d="m11 18 3 3 7-8" stroke="#E7EDF7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Market Risk<br>Monitor</span></div><nav class="r38-nav"><div class="r38-nav-item active"><span class="r38-nav-icon">⌂</span>대시보드</div><div class="r38-nav-item"><span class="r38-nav-icon">◉</span>위험지수</div><div class="r38-nav-item"><span class="r38-nav-icon">≋</span>시장 상태</div><div class="r38-nav-item"><span class="r38-nav-icon">▣</span>데이터</div><div class="r38-nav-item"><span class="r38-nav-icon">♢</span>알림</div><div class="r38-nav-item"><span class="r38-nav-icon">▤</span>리포트</div><div class="r38-nav-item"><span class="r38-nav-icon">⚙</span>설정</div><div class="r38-nav-item"><span class="r38-nav-icon">?</span>도움말</div></nav><div class="r38-side-bottom"><div class="r38-side-title">최종 업데이트</div><div>'''+now_kst.strftime('%Y.%m.%d %H:%M')+'''</div><div>(한국시간 기준)</div><div class="r38-toggle">다크 모드 <span class="r38-toggle-pill"></span></div></div></aside><div class="r38-mobilebar"><div class="r38-mobile-brand">Market Risk Monitor</div><div class="r38-mobile-menu">☰</div></div>'''
 st.markdown(sidebar,unsafe_allow_html=True)
-st.markdown(f'''<div class="r38-head"><div><div class="r38-title">대시보드</div><div class="r38-subtitle">현재 시장 상황과 위험 요인을 한눈에 파악하세요.</div><div class="r38-credit">Developed by 유유상 · v3.38.1</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><div class="r38-action">↻　데이터 업데이트</div></div></div>''',unsafe_allow_html=True)
+st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.38.2</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><div class="r38-action">↻　데이터 업데이트</div></div></div>''',unsafe_allow_html=True)
 refresh_indicator()
 
 _structure_count=int(structure.get('count',0) or 0); _structure_raw=structure.get('level','정상')
@@ -860,18 +872,26 @@ struct_tone='#e53b46' if _structure_count>=3 else ('#ef9d17' if _structure_count
 struct_label={'정상':'정상','관찰':'관찰','주의':'주의','경계':'경고'}.get(_structure_raw,_structure_raw); rapid_label={'정상':'정상','관찰':'관찰','급변 경보':'경고','강한 스트레스':'경고'}.get(_rapid_raw,_rapid_raw)
 struct_chips=''.join(f'<span class="r38-chip warn">{_esc(x[0])}</span>' for x in structure.get('items',[])) or '<span class="r38-chip warn">활성 신호 없음</span>'
 rapid_chips=''.join(f'<span class="r38-chip">{_esc(x)}</span>' for x in rapid.get('active',[])) or '<span class="r38-chip">동시 급변 없음</span>'
-comments=[]
-if pd.notna(base_overall) and overall>base_overall+0.05: comments.append(f'기본 위험도 {base_overall:.1f} → 최종 {overall:.1f}: {floor_diag.get("reason","신호 하한")} 반영')
-if rapid.get('level') in ('급변 경보','강한 스트레스'): comments.append('서로 다른 빠른 지표가 동시에 악화되어 단기 시장 스트레스가 확인됩니다.')
-elif structure.get('count',0)>=2: comments.append('여러 구조적 취약성이 겹쳐 중기 위험을 주의해서 볼 구간입니다.')
-elif pd.notna(dev) and dev>=10: comments.append('S&P500의 200일선 대비 과열 부담이 높은 편입니다.')
-else: comments.append('현재 구조적 취약성과 급변 신호가 동시에 강하게 나타나지는 않고 있습니다.')
+_struct_names=[x[0] for x in structure.get('items',[]) if x]
+if rapid.get('level') in ('급변 경보','강한 스트레스'):
+    market_summary='단기 시장 스트레스가 빠르게 높아지고 있어 변동성 확대에 주의가 필요합니다.'
+elif _structure_count>=2:
+    market_summary='시장 급변은 제한적이지만 여러 구조적 부담이 겹쳐 중기 위험을 주의해서 볼 구간입니다.'
+elif _structure_count==1:
+    _reason=_struct_names[0] if _struct_names else '구조적 위험 요인'
+    market_summary=f'시장 전반은 비교적 안정적이지만, {_reason}로 구조적 부담은 남아 있습니다.'
+elif overall>=61:
+    market_summary='여러 위험 요인이 높아져 시장 취약성이 높은 상태입니다.'
+elif overall>=41:
+    market_summary='시장 위험은 보통 수준이며 일부 지표의 변화는 계속 확인할 필요가 있습니다.'
+else:
+    market_summary='시장 전반은 안정적이며 뚜렷한 급변 신호는 없습니다.'
 hero_tone='#e53b46' if overall>=61 else ('#ef9d17' if overall>=41 else '#2fa374')
 level1=f'''<section class="r38-panel"><div class="r38-section-title">한눈에 보는 시장 위험 {_info38("종합 위험지수는 중기적인 시장 취약성을 0~100으로 요약합니다. 구조적 위험은 수개월~1년 지속될 수 있는 취약성을, 시장 급변 신호는 수일~수주 단위의 빠른 스트레스를 별도로 보여줍니다.")}</div><div class="r38-hero-grid">
-<div class="r38-hero-card danger"><div class="r38-card-title">위험지수 (종합) {_info38("시장·밸류에이션, 변동성, 금리, 신용, 경기, 물가를 가중 합산한 기본 위험도에 구조·급변·진행 중 시장 스트레스 하한을 적용한 최종 위험지수입니다.")}</div><div class="r38-horizon">중기 · 누적 시장 취약성</div><div class="r38-hero-main"><div><div><span class="r38-big {'red' if overall>=61 else ('orange' if overall>=41 else '')}">{overall:.1f}</span><span class="r38-unit">/ 100</span></div>{_risk_badge(overall)}<div class="r38-delta-label">전일 대비</div><div class="r38-delta r38-{delta_class}">{_esc(delta_text)}</div></div>{_gauge_svg(overall,hero_tone)}</div><div class="r38-callout"><b>시장 스트레스:</b> {_esc(floor_diag.get('reason','기본 위험도 기준'))}<br>기본 위험지수 {base_overall:.1f}</div></div>
-<div class="r38-hero-card warn"><div class="r38-card-title">구조적 위험 {_info38("장단기금리 역전 기억, 높은 CAPE, 물가 재가속, 고용 악화처럼 수개월 이상 지속될 수 있는 구조적 취약성을 감지합니다. 표시되는 하한은 별도 점수가 아니라 최종 위험지수의 최소값입니다.")}</div><div class="r38-horizon">수개월~1년 · 지속 취약성</div><div class="r38-hero-main"><div><div class="r38-signal-main">{_esc(struct_label)}</div><span class="r38-badge {'orange' if _structure_count else 'green'}">신호 {_structure_count}개</span><div class="r38-signal-meta">{'활성 신호가 확인됨' if _structure_count else '활성 구조 신호 없음'}</div></div><div class="r38-floor-box"><div class="r38-floor-label">위험지수 하한</div><div class="r38-floor-value {'orange' if struct_score else ''}">{f'{struct_score:.0f}' if struct_score else '없음'}</div></div></div><div class="r38-callout warn"><b>감지된 신호 ({_structure_count}개)</b><div class="r38-chips">{struct_chips}</div></div></div>
+<div class="r38-hero-card danger"><div class="r38-card-title">위험지수 {_info38("시장·밸류에이션, 변동성, 금리, 신용, 경기, 물가를 가중 합산한 기본 위험도에 구조·급변·진행 중 시장 스트레스 하한을 적용한 최종 위험지수입니다.")}</div><div class="r38-horizon">중기 · 누적 시장 취약성</div><div class="r38-hero-main"><div><div><span class="r38-big {'red' if overall>=61 else ('orange' if overall>=41 else '')}">{overall:.1f}</span><span class="r38-unit">/ 100</span></div>{_risk_badge(overall)}</div><div class="r38-gauge-wrap"><div class="r38-gauge-delta"><div class="r38-delta-label">전일 대비</div><div class="r38-delta r38-{delta_class}">{_esc(delta_text)}</div></div>{_gauge_svg(overall,hero_tone)}</div></div><div class="r38-callout">현재 위험도 <b>{_esc(label(overall))}</b> · 구조적 신호 {_structure_count}개 · 급변 신호 {_rapid_count}개</div></div>
+<div class="r38-hero-card warn"><div class="r38-card-title">구조적 위험 {_info38("장단기금리 역전 기억, 높은 CAPE, 물가 재가속, 고용 악화처럼 수개월 이상 지속될 수 있는 구조적 취약성을 감지합니다.")}</div><div class="r38-horizon">수개월~1년 · 지속 취약성</div><div class="r38-hero-main signal-only"><div><div class="r38-signal-main">{_esc(struct_label)}</div><span class="r38-badge {'orange' if _structure_count else 'green'}">신호 {_structure_count}개</span><div class="r38-signal-meta">{'활성 신호가 확인됨' if _structure_count else '활성 구조 신호 없음'}</div></div></div><div class="r38-callout warn"><b>감지된 신호 ({_structure_count}개)</b><div class="r38-chips">{struct_chips}</div></div></div>
 <div class="r38-hero-card danger"><div class="r38-card-title">시장 급변 신호 {_info38("VIX, 신용 스프레드, 10년물 금리 상승, 신규 실업수당 추세 등 서로 다른 빠른 지표가 동시에 악화되는지를 봅니다. 1개 축은 관찰만 하며, 2개 이상 동시 확인될 때 위험지수 하한이 적용됩니다.")}</div><div class="r38-horizon">수일~수주 · 단기 시장 스트레스</div><div class="r38-hero-main"><div><div class="r38-signal-main">{_esc(rapid_label)}</div><span class="r38-badge {'red' if _rapid_count>=2 else ('orange' if _rapid_count else 'green')}">동시 급변 {_rapid_count}개</span><div class="r38-signal-meta">{'단기 스트레스 확인' if _rapid_count>=2 else ('단일 축 관찰' if _rapid_count else '동시 급변 없음')}</div></div><div class="r38-floor-box"><div class="r38-floor-label">위험지수 하한</div><div class="r38-floor-value {'red' if rapid_score>=65 else ('orange' if rapid_score else '')}">{f'{rapid_score:.0f}' if rapid_score else '없음'}</div></div></div><div class="r38-callout"><b>감지된 신호 ({_rapid_count}개)</b><div class="r38-chips">{rapid_chips}</div></div></div>
-</div><div class="r38-interpret">{' '.join(_esc(x) for x in comments)}</div></section>'''
+</div><div class="r38-interpret">{_esc(market_summary)}</div></section>'''
 st.markdown(level1,unsafe_allow_html=True)
 
 label_map={'시장·밸류에이션':'주식 시장','변동성':'변동성','금리':'금리','신용':'신용 시장','경기':'경기','물가':'물가'}; icon_map={'시장·밸류에이션':'▧','변동성':'↕','금리':'%','신용':'▤','경기':'▥','물가':'◉'}
@@ -888,7 +908,7 @@ for k in ['시장·밸류에이션','변동성','금리','신용','경기','물�
     sc=scores.get(k,np.nan); state_class='low' if pd.notna(sc) and sc<41 else ('mid' if pd.notna(sc) and sc<61 else '')
     score_txt=f'{sc:.1f}' if pd.notna(sc) else 'N/A'
     risk_cards.append(f'''<div class="r38-risk-card"><div class="r38-risk-top"><div class="r38-risk-icon">{icon_map[k]}</div><div class="r38-risk-name">{label_map[k]} {_info38(risk_info_map[k])}</div></div><div class="r38-risk-numrow"><div class="r38-risk-score">{score_txt}</div><span class="r38-mini-state {state_class}">{_esc(label(sc))}</span></div>{_seg_html(sc)}<div class="r38-risk-foot">0~100 · 높을수록 위험</div></div>''')
-st.markdown('<section class="r38-panel"><div class="r38-section-title">6대 위험 카테고리 현황 {_info38("종합 위험지수를 구성하는 여섯 영역의 현재 점수입니다. 각 점수는 0~100이며 높을수록 해당 영역의 위험이 큽니다.")}</div><div class="r38-risk-grid">'+''.join(risk_cards)+'</div><div class="r38-note">* 각 카테고리는 0~100 점수로 평가되며, 높을수록 위험이 큽니다.</div></section>',unsafe_allow_html=True)
+st.markdown(f'''<section class="r38-panel"><div class="r38-section-title">6대 위험 카테고리 현황 {_info38("종합 위험지수를 구성하는 여섯 영역의 현재 점수입니다. 각 점수는 0~100이며 높을수록 해당 영역의 위험이 큽니다.")}</div><div class="r38-risk-grid">{''.join(risk_cards)}</div><div class="r38-note">* 각 카테고리는 0~100 점수로 평가되며, 높을수록 위험이 큽니다.</div></section>''',unsafe_allow_html=True)
 
 fx=_read_fx().get('items',{})
 spv,spd,spc=_fmt_series_metric(sp,'',2); effv,effd,effc=_fmt_series_metric(fed,'%',2); y2v,y2d,y2c=_fmt_series_metric(y2,'%',2); y10v,y10d,y10c=_fmt_series_metric(y10,'%',2); y30v,y30d,y30c=_fmt_series_metric(y30,'%',2)
@@ -903,7 +923,7 @@ elif pd.notna(sahm_now) and sahm_now>=.5: rec_status='관찰'
 else: rec_status='정상'
 sahm_text=f'{sahm_now:.2f}%p' if pd.notna(sahm_now) else 'N/A'; unemp_text=f'{latest(unemp):.1f}%' if pd.notna(latest(unemp)) else 'N/A'
 rec_html=f'''<div class="r38-recession"><div class="r38-recession-card"><div class="r38-recession-name">실업률</div><div class="r38-recession-value">{unemp_text}</div></div><div class="r38-recession-card"><div class="r38-recession-name">Sahm Rule</div><div class="r38-recession-value">{sahm_text}</div></div><div class="r38-recession-card"><div class="r38-recession-name">경기침체 신호</div><div class="r38-recession-value">{rec_status}</div></div></div>'''
-st.markdown('<section class="r38-panel"><div class="r38-section-title">핵심 시장 상태 {_info38("위험지수 계산과 시장 해석에 쓰는 주요 지표의 현재값, 직전 변화, 최근 추세를 함께 보여줍니다. 환율·DXY·WTI 일부 항목은 참고용이며 산식에는 포함되지 않습니다.")}</div><div class="r38-market-table">'+''.join(market_html)+'</div>'+rec_html+'<div class="r38-note">환율·달러인덱스·WTI 유가는 참고자료이며 종합위험지수 산식에는 포함하지 않습니다.</div></section>',unsafe_allow_html=True)
+st.markdown(f'''<section class="r38-panel"><div class="r38-section-title">핵심 시장 상태 {_info38("위험지수 계산과 시장 해석에 쓰는 주요 지표의 현재값, 직전 변화, 최근 추세를 함께 보여줍니다. 환율·DXY·WTI 일부 항목은 참고용이며 산식에는 포함되지 않습니다.")}</div><div class="r38-market-table">{''.join(market_html)}</div>{rec_html}<div class="r38-note">환율·달러인덱스·WTI 유가는 참고자료이며 종합위험지수 산식에는 포함하지 않습니다.</div></section>''',unsafe_allow_html=True)
 
 @st.cache_data(ttl=3600,show_spinner=False)
 def historical_risk_fast_338(data,cape):
@@ -923,7 +943,7 @@ def render_history_chart_338(hist):
     chart_html='''<div id="r38ChartWrap" style="width:100%;height:300px;position:relative;font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR','Segoe UI',sans-serif;touch-action:pan-y;background:#fff"><svg id="r38Chart" width="100%" height="300"></svg><div id="r38Tip" style="display:none;position:absolute;pointer-events:none;background:#101827;color:#fff;border-radius:7px;padding:8px 10px;font-size:11px;line-height:1.55;white-space:nowrap;z-index:5"></div></div><script>(()=>{const data=__PAYLOAD__,svg=document.getElementById('r38Chart'),wrap=document.getElementById('r38ChartWrap'),tip=document.getElementById('r38Tip');if(!data.length)return;const NS='http://www.w3.org/2000/svg',W=Math.max(320,wrap.clientWidth),H=300,L=38,R=12,T=24,B=35,PW=W-L-R,PH=H-T-B;svg.setAttribute('viewBox',`0 0 ${W} ${H}`);const x=i=>L+(data.length===1?PW/2:i*PW/(data.length-1)),y=v=>T+(100-v)*PH/100,el=(n,a={})=>{const q=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>q.setAttribute(k,v));return q};[[70,100,'#fff1f1'],[40,70,'#fff8e8'],[0,40,'#f1f8f4']].forEach(([a,b,c])=>svg.appendChild(el('rect',{x:L,y:y(b),width:PW,height:y(a)-y(b),fill:c})));[0,25,50,75,100].forEach(v=>{const yy=y(v);svg.appendChild(el('line',{x1:L,y1:yy,x2:W-R,y2:yy,stroke:'#e7ebef','stroke-width':'1'}));const t=el('text',{x:L-7,y:yy+4,'text-anchor':'end',fill:'#818995','font-size':'10'});t.textContent=v;svg.appendChild(t)});data.forEach((d,i)=>{if(i===0||i===data.length-1||i%2===0){const t=el('text',{x:x(i),y:H-11,'text-anchor':'middle',fill:'#818995','font-size':'10'});t.textContent=i===0?`${String(d.year).slice(-2)}년 ${d.month}월`:(d.month===1?`${String(d.year).slice(-2)}년`:`${d.month}월`);svg.appendChild(t)}});svg.appendChild(el('polyline',{points:data.map((d,i)=>`${x(i)},${y(d.base)}`).join(' '),fill:'none',stroke:'#4169c7','stroke-width':'1.6','stroke-dasharray':'5 4'}));svg.appendChild(el('polyline',{points:data.map((d,i)=>`${x(i)},${y(d.risk)}`).join(' '),fill:'none',stroke:'#e23a43','stroke-width':'2.1','stroke-linejoin':'round','stroke-linecap':'round'}));const leg1=el('text',{x:L,y:12,fill:'#e23a43','font-size':'10'});leg1.textContent='━ 최종 위험지수';svg.appendChild(leg1);const leg2=el('text',{x:L+92,y:12,fill:'#4169c7','font-size':'10'});leg2.textContent='┄ 기본 위험지수';svg.appendChild(leg2);const show=clientX=>{const rect=wrap.getBoundingClientRect(),px=Math.max(0,Math.min(rect.width,clientX-rect.left)),idx=Math.max(0,Math.min(data.length-1,Math.round(px/rect.width*(data.length-1)))),d=data[idx];tip.innerHTML=`<b>${d.date}</b><br><span style="color:#ff5961">●</span> 최종 위험지수　<b>${d.risk.toFixed(1)}</b><br><span style="color:#6790e8">●</span> 기본 위험지수　${d.base.toFixed(1)}`;tip.style.display='block';tip.style.left=Math.max(4,Math.min(px+10,rect.width-175))+'px';tip.style.top='45px'},hide=()=>tip.style.display='none';wrap.addEventListener('mousemove',e=>show(e.clientX));wrap.addEventListener('mouseleave',hide);wrap.addEventListener('touchstart',e=>{if(e.touches[0])show(e.touches[0].clientX)},{passive:true});wrap.addEventListener('touchend',hide,{passive:true});})();</script>'''.replace('__PAYLOAD__',payload)
     components.html(chart_html,height=305,scrolling=False)
 
-st.markdown('<section class="r38-panel"><div class="r38-section-title">위험지수 추이 {_info38("빨간선은 신호 하한을 반영한 최종 위험지수, 파란 점선은 하한 적용 전 기본 위험지수입니다. 과거 계산은 초기 로딩 속도를 위해 필요할 때만 실행합니다.")}</div>',unsafe_allow_html=True)
+st.markdown(f'''<section class="r38-panel"><div class="r38-section-title">위험지수 추이 {_info38("빨간선은 신호 하한을 반영한 최종 위험지수, 파란 점선은 하한 적용 전 기본 위험지수입니다. 과거 계산은 초기 로딩 속도를 위해 필요할 때만 실행합니다.")}</div>''',unsafe_allow_html=True)
 if 'show_history_338' not in st.session_state: st.session_state.show_history_338=False
 if st.button('최근 1년 추이 불러오기',type='secondary',key='history338'): st.session_state.show_history_338=True
 if st.session_state.show_history_338:
