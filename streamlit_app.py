@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 st.set_page_config(page_title="미국 증시 위험 모니터", page_icon="🇺🇸", layout="wide")
 
-# v3.38.9 UI state must be initialized before any theme/navigation rendering.
+# v3.39.0 UI state must be initialized before any theme/navigation rendering.
 _qp = st.query_params
 _view = str(_qp.get("view", "dashboard"))
 _theme = str(_qp.get("theme", "light"))
@@ -138,11 +138,47 @@ def canonical_series(data,key):
 ROOT_CACHE=_Path(os.environ.get("LOCALAPPDATA", str(_Path.home()))) / "RiskMonitor"
 CACHE_DIR=ROOT_CACHE / "data"
 CACHE_DIR.mkdir(parents=True,exist_ok=True)
-RECENT_DAYS=90
+RECENT_DAYS=1000
 REFRESH_STATUS=ROOT_CACHE / "refresh_status.json"
 FX_CACHE=ROOT_CACHE / "fx_snapshot.json"
 CAPE_CACHE=ROOT_CACHE / "cape.csv"
 CAPE_URL="https://www.multpl.com/shiller-pe/table/by-month"
+
+
+# v3.39.0 source refresh TTLs.
+# UI reruns never need to hit the network merely because the user changed a view/theme.
+SERIES_TTL_SECONDS={
+    "EFFR":1800,
+    "DGS2":1800,"DGS10":1800,"DGS30":1800,
+    "SP500":1800,"VIXCLS":1800,
+    "BAMLH0A0HYM2":3600,"BAMLC0A4CBBB":3600,
+    "THREEFYTP10":21600,"ICSA":21600,
+    "CPIAUCSL":43200,"CPILFESL":43200,"PCEPILFE":43200,"UNRATE":43200,
+}
+FX_TTL_SECONDS=600
+CAPE_TTL_SECONDS=86400
+TREASURY_TTL_SECONDS=1800
+AUTO_REFRESH_CHECK_SECONDS=600
+
+def _file_fresh(path,ttl):
+    try:
+        return (time.time()-path.stat().st_mtime) < ttl
+    except Exception:
+        return False
+
+def _series_fresh(sid):
+    return _file_fresh(_cache_file(sid),SERIES_TTL_SECONDS.get(sid,3600))
+
+def _auto_refresh_due():
+    # Missing auxiliary caches should be filled even when the last general refresh was recent.
+    if not FX_CACHE.exists() or not CAPE_CACHE.exists():
+        return True
+    if not REFRESH_STATUS.exists():
+        return True
+    try:
+        return (time.time()-REFRESH_STATUS.stat().st_mtime) >= AUTO_REFRESH_CHECK_SECONDS
+    except Exception:
+        return True
 
 
 def _migrate_legacy_cache():
@@ -243,7 +279,7 @@ def _initial_fetch():
     def one(item):
         name,sid=item
         try:
-            s=_fetch(sid,recent=False); _write_cache(sid,s); return name,s,None
+            s=_fetch(sid,recent=True); _write_cache(sid,s); return name,s,None
         except Exception as e: return name,pd.Series(dtype=float),f"{name} ({sid}): {e}"
     with ThreadPoolExecutor(max_workers=10) as ex:
         futures=[ex.submit(one,x) for x in SERIES.items()]
@@ -253,11 +289,15 @@ def _initial_fetch():
     return out,errors
 
 
-def _refresh_series(name,sid):
+def _refresh_series(name,sid,force=False):
     try:
-        cached=_read_cache(sid); new=_fetch(sid,recent=bool(len(cached)))
+        cached=_read_cache(sid)
+        if len(cached) and not force and _series_fresh(sid):
+            return name,cached,None
+        new=_fetch(sid,recent=bool(len(cached)))
         return name,_merge_and_write(sid,new),None
-    except Exception as e: return name,_read_cache(sid),f"{name}: {e}"
+    except Exception as e:
+        return name,_read_cache(sid),f"{name}: {e}"
 
 
 def _fetch_yahoo_symbol(ticker):
@@ -289,7 +329,8 @@ def _fetch_yahoo_symbol(ticker):
     raise ValueError(f"{ticker}: Yahoo 요청 실패 ({last_error})")
 
 
-def _refresh_fx():
+def _refresh_fx(force=False):
+    if not force and _file_fresh(FX_CACHE,FX_TTL_SECONDS): return []
     tickers={"원/달러":"USDKRW=X","엔/달러":"USDJPY=X","달러인덱스":"DX-Y.NYB","WTI 유가":"CL=F"}
     previous=_read_fx().get("items",{})
     snap={"updated":time.time(),"source":"Yahoo Finance","items":dict(previous)}
@@ -324,7 +365,8 @@ def _read_cape():
     except Exception: return pd.Series(dtype=float)
 
 
-def _refresh_cape():
+def _refresh_cape(force=False):
+    if not force and _file_fresh(CAPE_CACHE,CAPE_TTL_SECONDS): return True
     headers={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"}
     r=requests.get(CAPE_URL,headers=headers,timeout=(3,7)); r.raise_for_status()
     # Multpl의 월별 표를 외부 HTML 파서 의존성 없이 읽는다.
@@ -347,13 +389,15 @@ def _write_refresh_status(ok,errors):
     tmp=REFRESH_STATUS.with_suffix(".tmp"); tmp.write_text(json.dumps(payload,ensure_ascii=False),encoding="utf-8"); tmp.replace(REFRESH_STATUS)
 
 
-def _refresh_all_background():
+def _refresh_all_background(force=False):
     errors=[]
     priority=[("기준금리","EFFR"),("2년물","DGS2"),("10년물","DGS10"),("30년물","DGS30")]
+    need_treasury=force or not _file_fresh(_cache_file("DGS10"),TREASURY_TTL_SECONDS)
     with ThreadPoolExecutor(max_workers=6) as ex:
-        fs=[ex.submit(_refresh_series,*x) for x in priority]
-        fx_future=ex.submit(_refresh_fx)
-        cape_future=ex.submit(_refresh_cape)
+        fs=[ex.submit(_refresh_series,*x,force) for x in priority]
+        fx_future=ex.submit(_refresh_fx,force)
+        cape_future=ex.submit(_refresh_cape,force)
+        treasury_future=ex.submit(_treasury_latest) if need_treasury else None
         for f in fs:
             _,_,err=f.result()
             if err: errors.append(err)
@@ -361,13 +405,16 @@ def _refresh_all_background():
         except Exception as e: errors.append(f"환율: {e}")
         try: cape_future.result()
         except Exception as e: errors.append(f"CAPE: {e}")
-    try:
-        d,vals=_treasury_latest()
-        for sid,v in vals.items(): _merge_and_write(sid,pd.Series([v],index=pd.DatetimeIndex([d]),dtype=float))
-    except Exception as e: errors.append(f"미 재무부 최신 금리: {e}")
+        if treasury_future is not None:
+            try:
+                d,vals=treasury_future.result()
+                for sid,v in vals.items():
+                    _merge_and_write(sid,pd.Series([v],index=pd.DatetimeIndex([d]),dtype=float))
+            except Exception as e:
+                errors.append(f"미 재무부 최신 금리: {e}")
     rest=[x for x in SERIES.items() if x not in priority]
-    with ThreadPoolExecutor(max_workers=8) as ex:
-        futures=[ex.submit(_refresh_series,*x) for x in rest]
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futures=[ex.submit(_refresh_series,*x,force) for x in rest]
         for f in as_completed(futures):
             _,_,err=f.result()
             if err: errors.append(err)
@@ -384,13 +431,50 @@ def _cache_ready(data):
     return all(len(data.get(k,pd.Series(dtype=float)).dropna()) for k in required)
 
 
+def _get_session_data():
+    stamp=_status_mtime()
+    if st.session_state.get("_market_data_stamp")==stamp and "_market_data_mem" in st.session_state:
+        return st.session_state["_market_data_mem"]
+    d=_read_all_cache()
+    st.session_state["_market_data_mem"]=d
+    st.session_state["_market_data_stamp"]=stamp
+    return d
+
+def _set_session_data(d):
+    st.session_state["_market_data_mem"]=d
+    st.session_state["_market_data_stamp"]=_status_mtime()
+
+def _get_session_cape():
+    stamp=_status_mtime()
+    if st.session_state.get("_cape_stamp")==stamp and "_cape_mem" in st.session_state:
+        return st.session_state["_cape_mem"]
+    c=_read_cape()
+    st.session_state["_cape_mem"]=c
+    st.session_state["_cape_stamp"]=stamp
+    return c
+
+def _get_session_fx_items():
+    stamp=_status_mtime()
+    if st.session_state.get("_fx_stamp")==stamp and "_fx_mem" in st.session_state:
+        return st.session_state["_fx_mem"]
+    items=_read_fx().get("items",{})
+    st.session_state["_fx_mem"]=items
+    st.session_state["_fx_stamp"]=stamp
+    return items
+
+def _invalidate_session_market_cache():
+    for k in ("_market_data_mem","_market_data_stamp","_cape_mem","_cape_stamp","_fx_mem","_fx_stamp",
+              "_dashboard_calc","_dashboard_calc_stamp"):
+        st.session_state.pop(k,None)
+
+
 # Handle one-shot manual refresh after refresh helpers are defined.
 _manual_refresh = str(_qp.get("refresh", "0")) == "1"
 if _manual_refresh:
     st.session_state.refresh_started = True
     st.session_state.refresh_applied = False
     st.session_state.refresh_baseline = _status_mtime()
-    threading.Thread(target=_refresh_all_background, daemon=True).start()
+    threading.Thread(target=_refresh_all_background, kwargs={'force':True}, daemon=True).start()
     # Remove refresh=1 so browser reloads don't retrigger endlessly.
     st.query_params.clear()
     if _view != "dashboard":
@@ -398,12 +482,12 @@ if _manual_refresh:
     if _theme != "light":
         st.query_params["theme"] = _theme
 
-data=_read_all_cache(); initial_errors=[]
+data=_get_session_data(); initial_errors=[]
 if not _cache_ready(data):
     loading=st.empty(); loading.markdown("""
     <div class='loading-shell'><div class='loading-title'></div><div class='loading-score'></div>
     <div class='loading-row'><span></span><span></span><span></span></div><div class='loading-text'>최초 데이터 준비 중…</div></div>""",unsafe_allow_html=True)
-    _,initial_errors=_initial_fetch(); data=_read_all_cache(); loading.empty()
+    _,initial_errors=_initial_fetch(); data=_read_all_cache(); _set_session_data(data); loading.empty()
 if not _cache_ready(data):
     st.error("시장 데이터를 충분히 가져오지 못했습니다.")
     if initial_errors:
@@ -412,20 +496,35 @@ if not _cache_ready(data):
     st.stop()
 
 if "refresh_started" not in st.session_state:
-    st.session_state.refresh_started=True; st.session_state.refresh_applied=False; st.session_state.refresh_baseline=_status_mtime()
-    threading.Thread(target=_refresh_all_background,daemon=True).start()
+    st.session_state.refresh_started=True
+    st.session_state.refresh_baseline=_status_mtime()
+    if _auto_refresh_due():
+        st.session_state.refresh_applied=False
+        threading.Thread(target=_refresh_all_background,kwargs={"force":False},daemon=True).start()
+    else:
+        st.session_state.refresh_applied=True
 
-@st.fragment(run_every="1s")
-def refresh_indicator():
-    baseline=st.session_state.get("refresh_baseline",0.0); now=_status_mtime()
-    if st.session_state.get("refresh_started") and not st.session_state.get("refresh_applied") and now>baseline:
-        st.session_state.refresh_applied=True; st.rerun()
-    if st.session_state.get("refresh_applied"):
-        try:
-            info=json.loads(REFRESH_STATUS.read_text(encoding="utf-8")); ts=datetime.fromtimestamp(info.get("finished",time.time()), tz=ZoneInfo("Asia/Seoul")).strftime("%H:%M KST")
-            st.markdown(f"<div class='data-status done'><span></span>최신 데이터 · {ts}</div>",unsafe_allow_html=True)
-        except Exception: st.markdown("<div class='data-status done'><span></span>최신 데이터</div>",unsafe_allow_html=True)
-    else: st.markdown("<div class='data-status'><span></span>최신 데이터 확인 중…</div>",unsafe_allow_html=True)
+def _render_refresh_done():
+    try:
+        info=json.loads(REFRESH_STATUS.read_text(encoding="utf-8"))
+        ts=datetime.fromtimestamp(info.get("finished",time.time()),tz=ZoneInfo("Asia/Seoul")).strftime("%H:%M KST")
+        st.markdown(f"<div class='data-status done'><span></span>최신 데이터 · {ts}</div>",unsafe_allow_html=True)
+    except Exception:
+        st.markdown("<div class='data-status done'><span></span>최신 데이터</div>",unsafe_allow_html=True)
+
+if st.session_state.get("refresh_started") and not st.session_state.get("refresh_applied"):
+    @st.fragment(run_every="2s")
+    def refresh_indicator():
+        baseline=st.session_state.get("refresh_baseline",0.0)
+        now=_status_mtime()
+        if now>baseline:
+            st.session_state.refresh_applied=True
+            _invalidate_session_market_cache()
+            st.rerun()
+        st.markdown("<div class='data-status'><span></span>최신 데이터 확인 중…</div>",unsafe_allow_html=True)
+else:
+    def refresh_indicator():
+        _render_refresh_done()
 
 
 def latest(s):
@@ -766,38 +865,7 @@ def delta_value(a,b):
     return d,"— 0.0","flat"
 
 
-fed,y2,y10,y30=data["기준금리"],data["2년물"],data["10년물"],data["30년물"]
-term_premium=data.get("10년물기간프리미엄",pd.Series(dtype=float))
-hy,bbb=data["하이일드스프레드"],data["BBB스프레드"]
-cpi,core_cpi,core_pce=data["CPI"],data["근원CPI"],data["근원PCE"]
-unemp,icsa,sp,vix=data["실업률"],data["신규실업수당"],data["S&P500"],data["VIX"]
-cape=_read_cape()
-spread210=(y10-y2).dropna(); spread10fed=(y10-fed).dropna()
-
-snapshot=compute_snapshot(data,cape)
-scores=snapshot["scores"]; details=snapshot["details"]; overall=snapshot["overall"]; structure=snapshot["structure"]
-dev=details["market"].get("dev",np.nan); sahm_now=details["economy"].get("sahm_value",np.nan)
-
-# 전일 비교는 직전 S&P500 거래일 기준으로 모든 시계열을 그 날짜까지 잘라 재계산한다.
-zsp=sp.dropna(); prev_date=zsp.index[-2] if len(zsp)>=2 else None
-if prev_date is not None:
-    prev_data={k:v.loc[:prev_date].dropna() for k,v in data.items()}
-    prev_cape=cape.loc[:prev_date].dropna() if len(cape) else cape
-    prev_snapshot=compute_snapshot(prev_data,prev_cape,with_alerts=False)
-    prev_overall=prev_snapshot["overall"]
-    prev_fast=fast_signal_scores(prev_snapshot["details"])
-else:
-    prev_snapshot=None; prev_overall=np.nan; prev_fast={}
-current_fast=fast_signal_scores(details)
-rapid=rapid_alert(current_fast,prev_fast)
-base_overall=overall
-overall,floor_diag=apply_risk_floors(base_overall,structure,rapid,sp,vix,current_fast.get("신용",np.nan))
-if prev_snapshot is not None:
-    prev_structure=structural_signals(prev_snapshot["details"],(prev_data["10년물"]-prev_data["2년물"]).dropna())
-    prev_rapid=rapid_alert(prev_fast,{})
-    prev_overall,_=apply_risk_floors(prev_snapshot["overall"],prev_structure,prev_rapid,prev_data["S&P500"],prev_data["VIX"],prev_fast.get("신용",np.nan))
-
-# v3.38.9 adaptive dashboard refinement — Streamlit engine + custom HTML/CSS skin.
+# v3.39.0 adaptive dashboard refinement — Streamlit engine + custom HTML/CSS skin.
 st.markdown("""<style>
 html,body,.stApp{background:#f5f7fb!important;color:#171b23}
 header[data-testid="stHeader"]{background:transparent!important}
@@ -841,7 +909,7 @@ div[data-testid="stButton"] button{border:1px solid #dfe4eb!important;background
 }
 @media(max-width:780px){.r38-sidebar{display:none}.block-container{padding:calc(env(safe-area-inset-top,0px) + 44px) 12px 40px!important}.r38-mobilebar{display:flex;align-items:center;justify-content:space-between;background:#101b2d;color:#fff;margin:-18px -12px 15px;padding:12px 14px}.r38-mobile-brand{font-size:13px;font-weight:800}.r38-mobile-menu{font-size:19px}.r38-title{font-size:23px}.r38-subtitle{font-size:11.5px}.r38-head-actions{display:none}.r38-panel{padding:12px 11px}.r38-section-title{font-size:15px}.r38-hero-grid{grid-template-columns:1fr}.r38-hero-card{min-height:255px}.r38-hero-main{grid-template-columns:1fr;gap:10px;min-height:auto}.r38-hero-side{justify-content:flex-start;text-align:left}.r38-side-copy{max-width:none}.r38-callout{margin-top:14px;height:auto;min-height:auto}.r38-card-title{font-size:14px}.r38-big{font-size:37px;white-space:nowrap}.r38-signal-main{font-size:31px;white-space:nowrap}.r38-risk-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.r38-market-table{grid-template-columns:repeat(2,minmax(0,1fr))}.r38-market-col,.r38-market-col:nth-child(3){border-right:1px solid #e7ebf0}.r38-market-col:nth-child(even){border-right:0}.r38-market-col:nth-child(n+3){border-top:1px solid #e7ebf0}.r38-recession{gap:5px}.r38-metric{min-height:80px;padding:9px}.r38-spark{width:58px;flex-basis:58px}.r38-info-tip{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.98);width:min(340px,86vw);font-size:13px;padding:14px 15px;border-radius:14px;box-shadow:0 18px 55px rgba(0,0,0,.20)}.r38-info:hover .r38-info-tip,.r38-info:focus .r38-info-tip{transform:translate(-50%,-50%) scale(1)}.r38-footer{text-align:left}}
 </style>""", unsafe_allow_html=True)
-# ---------- v3.38.9 redesigned frontend ----------
+# ---------- v3.39.0 redesigned frontend ----------
 import math
 
 def _esc(x): return html.escape(str(x))
@@ -872,7 +940,11 @@ def _seg_html(score):
 def _spark_svg_38(values, cls='flat'):
     vals=[float(x) for x in values if pd.notna(x)]
     if len(vals)<2:return '<div class="r38-spark"></div>'
-    vals=vals[-60:]; lo=min(vals); hi=max(vals); span=(hi-lo) or 1.0; pts=[]
+    vals=vals[-60:]
+    if len(vals)>36:
+        idx=np.linspace(0,len(vals)-1,36,dtype=int)
+        vals=[vals[i] for i in idx]
+    lo=min(vals); hi=max(vals); span=(hi-lo) or 1.0; pts=[]
     for i,v in enumerate(vals):
         x=2+62*i/(len(vals)-1); y=25-22*(v-lo)/span; pts.append(f'{x:.1f},{y:.1f}')
     color='#e53b46' if cls=='up' else ('#2f70c9' if cls=='down' else '#8b93a1')
@@ -917,7 +989,7 @@ def _metric_html(name,value,delta,cls,spark):
 fed,y2,y10,y30=data['기준금리'],data['2년물'],data['10년물'],data['30년물']
 term_premium=data.get('10년물기간프리미엄',pd.Series(dtype=float)); hy,bbb=data['하이일드스프레드'],data['BBB스프레드']
 cpi,core_cpi,core_pce=data['CPI'],data['근원CPI'],data['근원PCE']; unemp,icsa,sp,vix=data['실업률'],data['신규실업수당'],data['S&P500'],data['VIX']
-cape=_read_cape(); spread210=(y10-y2).dropna(); spread10fed=(y10-fed).dropna()
+cape=_get_session_cape(); spread210=(y10-y2).dropna(); spread10fed=(y10-fed).dropna()
 snapshot=compute_snapshot(data,cape); scores=snapshot['scores']; details=snapshot['details']; structure=snapshot['structure']
 base_overall=snapshot['overall']; dev=details['market'].get('dev',np.nan); sahm_now=details['economy'].get('sahm_value',np.nan)
 zsp=sp.dropna(); prev_date=zsp.index[-2] if len(zsp)>=2 else None
@@ -941,7 +1013,7 @@ _heatmap_active=' active' if _view=='heatmap' else ''
 _theme_next='light' if _theme=='dark' else 'dark'
 sidebar='''<aside class="r38-sidebar"><div class="r38-brand"><span class="r38-brand-mark"><svg viewBox="0 0 32 38" fill="none"><path d="M16 2.5 27 7v8.4c0 8.1-4.4 14.4-11 18.1C9.4 29.8 5 23.5 5 15.4V7L16 2.5Z" stroke="#E7EDF7" stroke-width="1.5"/><path d="m11 18 3 3 7-8" stroke="#E7EDF7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Market Risk<br>Monitor</span></div><nav class="r38-nav"><a class="r38-nav-item'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">⌂</span>대시보드</a><a class="r38-nav-item'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▦</span>S&P500 히트맵</a><div class="r38-nav-item"><span class="r38-nav-icon">◉</span>위험지수</div><div class="r38-nav-item"><span class="r38-nav-icon">≋</span>시장 상태</div><div class="r38-nav-item"><span class="r38-nav-icon">▣</span>데이터</div><div class="r38-nav-item"><span class="r38-nav-icon">♢</span>알림</div><div class="r38-nav-item"><span class="r38-nav-icon">▤</span>리포트</div><div class="r38-nav-item"><span class="r38-nav-icon">⚙</span>설정</div><div class="r38-nav-item"><span class="r38-nav-icon">?</span>도움말</div></nav><div class="r38-side-bottom"><div class="r38-side-title">최종 업데이트</div><div>'''+now_kst.strftime('%Y.%m.%d %H:%M')+'''</div><div>(한국시간 기준)</div><a class="r38-toggle" href="?view='''+_view+'''&theme='''+_theme_next+'''" target="_self">다크 모드 <span class="r38-toggle-pill'''+(' on' if _theme=='dark' else '')+'''"></span></a></div></aside><div class="r38-mobilebar"><div class="r38-mobile-brand">Market Risk Monitor</div><div class="r38-mobile-menu">☰</div></div>'''
 st.markdown(sidebar,unsafe_allow_html=True)
-st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.38.9</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
+st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.39.0</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
 
 refresh_indicator()
 
@@ -972,14 +1044,21 @@ if _view=="heatmap":
     }
     _cfg = _urlparse.quote(_json.dumps(_tv_config, separators=(",", ":")))
     _src = "https://s.tradingview.com/embed-widget/stock-heatmap/?locale=kr#" + _cfg
-    _iframe = f"""<iframe
-        src="{_src}"
-        title="S&P500 Stock Heatmap"
-        style="display:block;width:100%;height:760px;border:0;border-radius:12px;background:transparent;"
-        loading="eager"
-        referrerpolicy="origin-when-cross-origin"
-        allowfullscreen
-    ></iframe>"""
+    _iframe = f"""<style>
+      .hm-shell{{position:relative;height:760px;border-radius:12px;overflow:hidden;background:#f4f6f9}}
+      .hm-load{{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;
+        font:600 13px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#7b8490;
+        background:linear-gradient(90deg,#f3f5f8 20%,#fafbfc 45%,#f3f5f8 70%);background-size:220% 100%;
+        animation:hmShimmer 1.2s linear infinite}}
+      @keyframes hmShimmer{{0%{{background-position:200% 0}}100%{{background-position:-200% 0}}}}
+      iframe{{position:relative;z-index:1;display:block;width:100%;height:760px;border:0;background:transparent}}
+    </style>
+    <div class="hm-shell">
+      <div id="hmload" class="hm-load">S&amp;P500 히트맵 불러오는 중…</div>
+      <iframe src="{_src}" title="S&P500 Stock Heatmap" loading="eager"
+        referrerpolicy="origin-when-cross-origin" allowfullscreen
+        onload="document.getElementById('hmload').style.display='none'"></iframe>
+    </div>"""
     components.html(_iframe, height=780, scrolling=False)
     st.stop()
 
@@ -1040,7 +1119,7 @@ for k in ['시장·밸류에이션','변동성','금리','신용','경기','물�
     risk_cards.append(f'''<div class="r38-risk-card"><div class="r38-risk-top"><div class="r38-risk-icon">{_risk_icon_svg(k)}</div><div class="r38-risk-name">{label_map[k]} {_info38(risk_info_map[k])}</div></div><div class="r38-risk-numrow"><div class="r38-risk-score">{score_txt}</div><span class="r38-mini-state {state_class}">{_esc(label(sc))}</span></div>{_seg_html(sc)}<div class="r38-risk-foot">0~100 · 높을수록 위험</div></div>''')
 st.markdown(f'''<section class="r38-panel"><div class="r38-section-title">6대 위험 카테고리 현황 {_info38("종합 위험지수를 구성하는 여섯 영역의 현재 점수입니다. 각 점수는 0~100이며 높을수록 해당 영역의 위험이 큽니다.")}</div><div class="r38-risk-grid">{''.join(risk_cards)}</div><div class="r38-note">* 각 카테고리는 0~100 점수로 평가되며, 높을수록 위험이 큽니다.</div></section>''',unsafe_allow_html=True)
 
-fx=_read_fx().get('items',{})
+fx=_get_session_fx_items()
 spv,spd,spc=_fmt_series_metric(sp,'',2); effv,effd,effc=_fmt_series_metric(fed,'%',2); y2v,y2d,y2c=_fmt_series_metric(y2,'%',2); y10v,y10d,y10c=_fmt_series_metric(y10,'%',2); y30v,y30d,y30c=_fmt_series_metric(y30,'%',2)
 hyv,hyd,hyc=_fmt_series_metric(hy,'%p',2); cpiv,cpid,cpic=_cpi_metric(cpi); unv,und,unc=_fmt_series_metric(unemp,'%',1)
 dxyv,dxyd,dxyc=_fmt_fx_metric('달러인덱스',2); krwv,krwd,krwc=_fmt_fx_metric('원/달러',2); jpyv,jpyd,jpyc=_fmt_fx_metric('엔/달러',2); wtiv,wtid,wtic=_fmt_fx_metric('WTI 유가',2); wtiv='$'+wtiv if wtiv!='N/A' else wtiv
@@ -1092,4 +1171,4 @@ with st.expander('세부 데이터 및 계산 기준'):
     st.write('경기: 실업률 30% + Sahm Rule 35% + 신규 실업수당 35%.')
     st.write('물가: CPI 25% + 근원 CPI 35% + 근원 PCE 40%.')
     st.write('데이터 공급자는 내부 표준 키와 분리되어 향후 실시간 API로 교체하기 쉽도록 유지합니다.')
-st.markdown(f'<div class="r38-footer">Risk Monitor 3.38.9 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
+st.markdown(f'<div class="r38-footer">Risk Monitor 3.39.0 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
