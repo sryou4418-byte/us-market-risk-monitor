@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 st.set_page_config(page_title="미국 증시 위험 모니터", page_icon="🇺🇸", layout="wide")
 
-# v3.42.2 UI state must be initialized before any theme/navigation rendering.
+# v3.43.0 UI state must be initialized before any theme/navigation rendering.
 _qp = st.query_params
 _view = str(_qp.get("view", "dashboard"))
 _theme = str(_qp.get("theme", "light"))
@@ -659,46 +659,168 @@ def _risk_level_label(score):
     if s<=80:return "높음"
     return "매우 높음"
 
-def _risk_reason_lines(category_scores, structural_count, rapid_count, structural_names=None, rapid_names=None, max_items=5):
-    labels={"시장·밸류에이션":"시장 과열도","변동성":"변동성","금리":"금리","신용":"신용시장","경기":"경기","물가":"물가"}
+
+def _risk_band(score):
+    s=float(score)
+    if s>=80: return "very_high"
+    if s>=65: return "high"
+    if s>=50: return "elevated"
+    if s>=35: return "normal"
+    return "low"
+
+def _risk_phrase_bank():
+    return {
+        "시장·밸류에이션":{
+            "very_high":["주가가 많이 오른 상태라 가격 부담이 매우 큽니다.","시장 과열 부담이 상당히 큰 편입니다."],
+            "high":["주가 수준이 높아 조정 위험을 계속 지켜볼 필요가 있습니다.","시장 과열 부담이 꽤 큰 편입니다."],
+            "elevated":["주가 수준이 다소 높은 편이라 추가 상승 여력보다 조정 위험을 함께 볼 필요가 있습니다.","시장 가격 부담이 평소보다 조금 높습니다."],
+            "normal":["시장 가격 부담은 특별히 높지도 낮지도 않은 수준입니다.","시장 과열 정도는 보통 수준입니다."],
+            "low":["시장 과열 부담은 크지 않습니다.","현재 주가 수준만 놓고 보면 과열 신호는 강하지 않습니다."],
+        },
+        "변동성":{
+            "very_high":["주가 변동이 매우 커져 단기 불안이 강하게 나타나고 있습니다.","시장 흔들림이 매우 커진 상태입니다."],
+            "high":["주가 변동이 커져 단기 불안이 높아진 상태입니다.","시장 흔들림이 평소보다 큰 편입니다."],
+            "elevated":["주가 변동이 조금 커지고 있어 단기 흐름을 주의해서 볼 필요가 있습니다.","단기 시장 불안이 평소보다 조금 높습니다."],
+            "normal":["주가 변동은 보통 수준입니다.","시장 흔들림은 평소 수준에 가깝습니다."],
+            "low":["주가 변동은 비교적 안정적입니다.","현재 시장 흔들림은 크지 않습니다."],
+        },
+        "금리":{
+            "very_high":["금리 부담이 매우 커 주식시장에 강한 압박 요인으로 작용하고 있습니다.","높은 금리와 금리 움직임이 시장 부담을 크게 키우고 있습니다."],
+            "high":["금리 부담이 현재 시장의 주요 위험 요인 중 하나입니다.","장기금리 부담이 꽤 높은 편입니다."],
+            "elevated":["금리 부담이 평소보다 조금 높은 편입니다.","금리 수준과 최근 흐름이 시장에 약간의 부담을 주고 있습니다."],
+            "normal":["금리 위험은 보통 수준입니다.","금리 쪽 부담은 중간 정도입니다."],
+            "low":["금리 부담은 비교적 낮은 편입니다.","현재 금리 여건은 시장에 큰 부담을 주는 수준은 아닙니다."],
+        },
+        "신용":{
+            "very_high":["신용시장이 크게 불안해지고 있어 기업 자금조달 여건까지 주의해서 볼 필요가 있습니다.","회사채 시장의 불안이 매우 큰 상태입니다."],
+            "high":["신용시장 불안이 커지고 있어 주식시장에도 부담이 될 수 있습니다.","회사채 시장이 평소보다 불안한 편입니다."],
+            "elevated":["신용시장에 약간의 긴장감이 나타나고 있습니다.","회사채 시장의 부담이 조금 높아졌습니다."],
+            "normal":["신용시장은 대체로 평소 수준입니다.","회사채 시장에서 특별한 이상 신호는 크지 않습니다."],
+            "low":["신용시장은 비교적 안정적입니다.","기업 자금조달 여건에서 큰 불안 신호는 보이지 않습니다."],
+        },
+        "경기":{
+            "very_high":["경기 둔화 신호가 매우 강해지고 있습니다.","고용과 경기 흐름에서 뚜렷한 악화 신호가 나타나고 있습니다."],
+            "high":["경기 둔화 위험이 꽤 높아진 상태입니다.","고용과 경기 흐름이 약해지고 있어 주의가 필요합니다."],
+            "elevated":["경기 둔화 가능성이 평소보다 조금 높아졌습니다.","고용과 경기 흐름이 다소 약해지고 있습니다."],
+            "normal":["경기 위험은 보통 수준입니다.","경기 흐름은 아직 뚜렷한 악화 구간은 아닙니다."],
+            "low":["경기 쪽 위험은 비교적 낮습니다.","고용과 경기 흐름은 대체로 안정적입니다."],
+        },
+        "물가":{
+            "very_high":["물가 압력이 매우 높아 금리 인하 기대를 제약할 수 있습니다.","인플레이션 부담이 시장에 큰 압박으로 작용하고 있습니다."],
+            "high":["물가 부담이 꽤 높아 금리 경로에 부담을 줄 수 있습니다.","인플레이션 압력이 여전히 높은 편입니다."],
+            "elevated":["물가 압력이 조금 높은 편이라 금리 흐름과 함께 지켜볼 필요가 있습니다.","인플레이션 부담이 평소보다 약간 높습니다."],
+            "normal":["물가 위험은 보통 수준입니다.","물가 흐름은 특별히 과열된 수준은 아닙니다."],
+            "low":["물가 부담은 비교적 낮은 편입니다.","현재 인플레이션 압력은 크지 않습니다."],
+        },
+    }
+
+def _choose_phrase(category, score, variant=0):
+    bank=_risk_phrase_bank()
+    band=_risk_band(score)
+    arr=bank.get(category,{}).get(band,[])
+    if not arr:
+        return f"{category} 위험은 {score:.0f}점입니다."
+    return arr[variant % len(arr)]
+
+def _signal_text(names, kind):
+    names=[str(x) for x in (names or []) if str(x).strip()]
+    if not names:
+        return ""
+    joined=", ".join(names[:3])
+    if kind=="structural":
+        return f"중기적으로는 {joined} 신호가 잡혀 있어 조정 위험을 계속 지켜볼 필요가 있습니다."
+    return f"단기적으로는 {joined} 신호가 나타나 시장이 빠르게 흔들릴 가능성을 주의해야 합니다."
+
+def _risk_sentence_engine(category_scores, structural_count, rapid_count, structural_names=None, rapid_names=None, max_items=5):
+    scores={k:float(v) for k,v in category_scores.items()}
+    ordered=sorted(scores.items(), key=lambda kv:kv[1], reverse=True)
+    low_ordered=sorted(scores.items(), key=lambda kv:kv[1])
+
+    primary=ordered[0]
+    secondary=ordered[1]
+    stabilizer=low_ordered[0]
+
     reasons=[]
-    for k,v in sorted(category_scores.items(),key=lambda kv:float(kv[1]),reverse=True)[:3]:
-        v=float(v)
-        if v>=65: reasons.append(f"{labels.get(k,k)} 위험이 {v:.0f}점으로 높아 현재 위험지수를 끌어올리고 있습니다.")
-        elif v>=50: reasons.append(f"{labels.get(k,k)} 위험이 {v:.0f}점으로 평균보다 높은 편입니다.")
-    for k,v in sorted(category_scores.items(),key=lambda kv:float(kv[1]))[:2]:
-        v=float(v)
-        if v<=35: reasons.append(f"{labels.get(k,k)} 위험은 {v:.0f}점으로 비교적 안정적이며 전체 위험을 낮추는 요인입니다.")
-    if structural_count:
-        if structural_names:
-            reasons.append(f"구조적 위험신호 {structural_count}개가 감지됐습니다: {', '.join(structural_names[:3])}.")
-        else:
-            reasons.append(f"구조적 위험신호 {structural_count}개가 감지되어 중기 위험 하한에 반영되고 있습니다.")
+    reasons.append(_choose_phrase(primary[0], primary[1], 0))
+
+    # Add a second risk driver only when it is meaningfully elevated.
+    if secondary[1] >= 50:
+        reasons.append(_choose_phrase(secondary[0], secondary[1], 1))
+
+    # Add one stabilizer when it is truly helping.
+    if stabilizer[1] <= 35 and stabilizer[0] not in (primary[0], secondary[0]):
+        reasons.append(_choose_phrase(stabilizer[0], stabilizer[1], 0))
+
+    structural_text=_signal_text(structural_names,"structural") if structural_count else ""
+    rapid_text=_signal_text(rapid_names,"rapid") if rapid_count else ""
+    if structural_text:
+        reasons.append(structural_text)
+    elif structural_count:
+        reasons.append(f"구조적 위험신호가 {structural_count}개 있어 중기적인 조정 가능성은 계속 확인할 필요가 있습니다.")
+
+    if rapid_text:
+        reasons.append(rapid_text)
+    elif rapid_count:
+        reasons.append(f"급변 신호가 {rapid_count}개 있어 단기적으로 시장이 빠르게 흔들릴 가능성을 주의해야 합니다.")
     else:
-        reasons.append("현재 구조적 위험신호가 감지되지 않아 중기 위험 하한 압력은 제한적입니다.")
-    if rapid_count:
-        if rapid_names:
-            reasons.append(f"급변 신호 {rapid_count}개가 감지됐습니다: {', '.join(rapid_names[:3])}.")
-        else:
-            reasons.append(f"급변 신호 {rapid_count}개가 감지되어 단기 시장 스트레스를 높이고 있습니다.")
-    else:
-        reasons.append("단기 급변 신호는 감지되지 않아 즉각적인 시장 스트레스는 제한적입니다.")
+        # Plain-language replacement for the old "즉각적인 시장 스트레스는 제한적입니다."
+        reasons.append("지금 당장 시장이 크게 흔들릴 조짐은 많지 않습니다.")
+
+    # De-duplicate and cap.
     out=[]
     for r in reasons:
-        if r not in out: out.append(r)
-        if len(out)>=max_items: break
-    return out
+        if r and r not in out:
+            out.append(r)
+        if len(out)>=max_items:
+            break
 
-def _risk_summary_sentence(category_scores, structural_count, rapid_count):
-    labels={"시장·밸류에이션":"시장 과열","변동성":"변동성","금리":"금리","신용":"신용시장","경기":"경기","물가":"물가"}
-    hi=max(category_scores.items(),key=lambda kv:float(kv[1])); lo=min(category_scores.items(),key=lambda kv:float(kv[1]))
-    tail=f"구조적 신호 {structural_count}개가 반영 중입니다." if structural_count else (f"급변 신호 {rapid_count}개가 반영 중입니다." if rapid_count else "추가 위험 하한을 강하게 올리는 신호는 제한적입니다.")
-    return f"{labels.get(hi[0],hi[0])} 부담이 가장 크고 {labels.get(lo[0],lo[0])}는 비교적 안정적입니다. {tail}"
+    # Summary sentence: risk driver + stabilizer + near-term conclusion.
+    high_name,high_score=primary
+    low_name,low_score=stabilizer
+    high_map={
+        "시장·밸류에이션":"시장 과열",
+        "변동성":"시장 변동성",
+        "금리":"금리",
+        "신용":"신용시장",
+        "경기":"경기 둔화",
+        "물가":"물가",
+    }
+    low_map={
+        "시장·밸류에이션":"시장 과열",
+        "변동성":"변동성",
+        "금리":"금리",
+        "신용":"신용시장",
+        "경기":"경기",
+        "물가":"물가",
+    }
+
+    if high_score>=65:
+        lead=f"현재는 {high_map.get(high_name,high_name)} 부담이 가장 큽니다."
+    elif high_score>=50:
+        lead=f"현재는 {high_map.get(high_name,high_name)} 부담이 다른 요인보다 조금 큰 편입니다."
+    else:
+        lead="현재는 한 가지 위험 요인이 크게 튀는 상황은 아닙니다."
+
+    if low_score<=35:
+        balance=f"반면 {low_map.get(low_name,low_name)}는 비교적 안정적입니다."
+    else:
+        balance="다른 위험 요인들도 대체로 보통 수준에 가깝습니다."
+
+    if rapid_count:
+        ending="다만 단기 급변 신호가 있어 시장 움직임이 갑자기 커질 가능성은 주의해야 합니다."
+    elif structural_count:
+        ending="당장 큰 충격 신호는 강하지 않지만, 중기적인 위험 신호는 남아 있습니다."
+    else:
+        ending="지금 당장 시장이 크게 흔들릴 조짐은 많지 않습니다."
+
+    summary=f"{lead} {balance} {ending}"
+    return summary,out
+
 
 CAPE_URL="https://www.multpl.com/shiller-pe/table/by-month"
 
 
-# v3.42.2 source refresh TTLs.
+# v3.43.0 source refresh TTLs.
 # UI reruns never need to hit the network merely because the user changed a view/theme.
 SERIES_TTL_SECONDS={
     "EFFR":1800,
@@ -1418,7 +1540,7 @@ def delta_value(a,b):
     return d,"— 0.0","flat"
 
 
-# v3.42.2 adaptive dashboard refinement — Streamlit engine + custom HTML/CSS skin.
+# v3.43.0 adaptive dashboard refinement — Streamlit engine + custom HTML/CSS skin.
 st.markdown("""<style>
 html,body,.stApp{background:#f5f7fb!important;color:#171b23}
 header[data-testid="stHeader"]{background:transparent!important}
@@ -1464,7 +1586,7 @@ div[data-testid="stButton"] button{border:1px solid #dfe4eb!important;background
 }
 @media(max-width:780px){.r38-sidebar{display:none}.block-container{padding:calc(env(safe-area-inset-top,0px) + 44px) 12px 40px!important}.r38-mobilebar{display:flex;align-items:center;justify-content:space-between;background:#101b2d;color:#fff;margin:-18px -12px 15px;padding:12px 14px}.r38-mobile-brand{font-size:13px;font-weight:800}.r38-mobile-menu{font-size:19px}.r38-title{font-size:23px}.r38-subtitle{font-size:11.5px}.r38-head-actions{display:none}.r38-panel{padding:12px 11px}.r38-section-title{font-size:15px}.r38-hero-grid{grid-template-columns:1fr}.r38-hero-card{min-height:255px}.r38-hero-main{grid-template-columns:1fr;gap:10px;min-height:auto}.r38-hero-side{justify-content:flex-start;text-align:left}.r38-side-copy{max-width:none}.r38-callout{margin-top:14px;height:auto;min-height:auto}.r38-card-title{font-size:14px}.r38-big{font-size:37px;white-space:nowrap}.r38-signal-main{font-size:31px;white-space:nowrap}.r38-risk-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.r38-market-table{grid-template-columns:repeat(2,minmax(0,1fr))}.r38-market-col,.r38-market-col:nth-child(3){border-right:1px solid #e7ebf0}.r38-market-col:nth-child(even){border-right:0}.r38-market-col:nth-child(n+3){border-top:1px solid #e7ebf0}.r38-recession{gap:5px}.r38-metric{min-height:80px;padding:9px}.r38-spark{width:58px;flex-basis:58px}.r38-info-tip{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.98);width:min(340px,86vw);font-size:13px;padding:14px 15px;border-radius:14px;box-shadow:0 18px 55px rgba(0,0,0,.20)}.r38-info:hover .r38-info-tip,.r38-info:focus .r38-info-tip{transform:translate(-50%,-50%) scale(1)}.r38-footer{text-align:left}}
 </style>""", unsafe_allow_html=True)
-# ---------- v3.42.2 redesigned frontend ----------
+# ---------- v3.43.0 redesigned frontend ----------
 import math
 
 def _esc(x): return html.escape(str(x))
@@ -1570,7 +1692,7 @@ _news_active=' active' if _view=='news' else ''
 _theme_next='light' if _theme=='dark' else 'dark'
 sidebar='''<aside class="r38-sidebar"><div class="r38-brand"><span class="r38-brand-mark"><svg viewBox="0 0 32 38" fill="none"><path d="M16 2.5 27 7v8.4c0 8.1-4.4 14.4-11 18.1C9.4 29.8 5 23.5 5 15.4V7L16 2.5Z" stroke="#E7EDF7" stroke-width="1.5"/><path d="m11 18 3 3 7-8" stroke="#E7EDF7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Market Risk<br>Monitor</span></div><nav class="r38-nav"><a class="r38-nav-item'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">⌂</span>대시보드</a><a class="r38-nav-item'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▦</span>S&P500 시장 맵</a><a class="r38-nav-item'''+_risk_active+'''" href="?view=risk&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">◉</span>위험지수</a><div class="r38-nav-item"><span class="r38-nav-icon">≋</span>시장 상태</div><div class="r38-nav-item"><span class="r38-nav-icon">▣</span>데이터</div><a class="r38-nav-item'''+_news_active+'''" href="?view=news&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▧</span>뉴스</a><div class="r38-nav-item"><span class="r38-nav-icon">▤</span>리포트</div><div class="r38-nav-item"><span class="r38-nav-icon">⚙</span>설정</div><div class="r38-nav-item"><span class="r38-nav-icon">?</span>도움말</div></nav><div class="r38-side-bottom"><div class="r38-side-title">최종 업데이트</div><div>'''+now_kst.strftime('%Y.%m.%d %H:%M')+'''</div><div>(한국시간 기준)</div><a class="r38-toggle" href="?view='''+_view+'''&theme='''+_theme_next+'''" target="_self">다크 모드 <span class="r38-toggle-pill'''+(' on' if _theme=='dark' else '')+'''"></span></a></div></aside><div class="r38-mobilebar"><div class="r38-mobile-brand">Market Risk Monitor</div><div class="r38-mobile-menu">☰</div></div>'''
 st.markdown(sidebar,unsafe_allow_html=True)
-st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.42.2</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
+st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.43.0</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
 
 refresh_indicator()
 
@@ -1651,8 +1773,14 @@ if _view=="risk":
     _struct_names=_signal_names(structure)
     _rapid_names=_signal_names(rapid)
     _level=_risk_level_label(_risk_final)
-    _summary=_risk_summary_sentence(_risk_categories,_struct_count,_rapid_count)
-    _reasons=_risk_reason_lines(_risk_categories,_struct_count,_rapid_count,_struct_names,_rapid_names,5)
+    _summary,_reasons=_risk_sentence_engine(
+        _risk_categories,
+        _struct_count,
+        _rapid_count,
+        _struct_names,
+        _rapid_names,
+        max_items=5
+    )
 
     st.markdown('<section class="r38-panel"><div class="r38-section-title">위험지수 상세</div><div class="r38-note">오늘의 위험지수가 어떤 요인으로 형성됐는지 자세히 확인하세요.</div></section>',unsafe_allow_html=True)
     _delta_txt=f"{_risk_delta:+.1f}" if np.isfinite(_risk_delta) else "—"
@@ -1796,4 +1924,4 @@ with st.expander('세부 데이터 및 계산 기준'):
     st.write('경기: 실업률 30% + Sahm Rule 35% + 신규 실업수당 35%.')
     st.write('물가: CPI 25% + 근원 CPI 35% + 근원 PCE 40%.')
     st.write('데이터 공급자는 내부 표준 키와 분리되어 향후 실시간 API로 교체하기 쉽도록 유지합니다.')
-st.markdown(f'<div class="r38-footer">Risk Monitor 3.42.2 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
+st.markdown(f'<div class="r38-footer">Risk Monitor 3.43.0 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
