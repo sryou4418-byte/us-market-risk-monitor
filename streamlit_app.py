@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 st.set_page_config(page_title="미국 증시 위험 모니터", page_icon="🇺🇸", layout="wide")
 
-# v3.39.3 UI state must be initialized before any theme/navigation rendering.
+# v3.39.4 UI state must be initialized before any theme/navigation rendering.
 _qp = st.query_params
 _view = str(_qp.get("view", "dashboard"))
 _theme = str(_qp.get("theme", "light"))
@@ -145,7 +145,7 @@ CAPE_CACHE=ROOT_CACHE / "cape.csv"
 CAPE_URL="https://www.multpl.com/shiller-pe/table/by-month"
 
 
-# v3.39.3 source refresh TTLs.
+# v3.39.4 source refresh TTLs.
 # UI reruns never need to hit the network merely because the user changed a view/theme.
 SERIES_TTL_SECONDS={
     "EFFR":1800,
@@ -865,7 +865,7 @@ def delta_value(a,b):
     return d,"— 0.0","flat"
 
 
-# v3.39.3 adaptive dashboard refinement — Streamlit engine + custom HTML/CSS skin.
+# v3.39.4 adaptive dashboard refinement — Streamlit engine + custom HTML/CSS skin.
 st.markdown("""<style>
 html,body,.stApp{background:#f5f7fb!important;color:#171b23}
 header[data-testid="stHeader"]{background:transparent!important}
@@ -909,7 +909,7 @@ div[data-testid="stButton"] button{border:1px solid #dfe4eb!important;background
 }
 @media(max-width:780px){.r38-sidebar{display:none}.block-container{padding:calc(env(safe-area-inset-top,0px) + 44px) 12px 40px!important}.r38-mobilebar{display:flex;align-items:center;justify-content:space-between;background:#101b2d;color:#fff;margin:-18px -12px 15px;padding:12px 14px}.r38-mobile-brand{font-size:13px;font-weight:800}.r38-mobile-menu{font-size:19px}.r38-title{font-size:23px}.r38-subtitle{font-size:11.5px}.r38-head-actions{display:none}.r38-panel{padding:12px 11px}.r38-section-title{font-size:15px}.r38-hero-grid{grid-template-columns:1fr}.r38-hero-card{min-height:255px}.r38-hero-main{grid-template-columns:1fr;gap:10px;min-height:auto}.r38-hero-side{justify-content:flex-start;text-align:left}.r38-side-copy{max-width:none}.r38-callout{margin-top:14px;height:auto;min-height:auto}.r38-card-title{font-size:14px}.r38-big{font-size:37px;white-space:nowrap}.r38-signal-main{font-size:31px;white-space:nowrap}.r38-risk-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.r38-market-table{grid-template-columns:repeat(2,minmax(0,1fr))}.r38-market-col,.r38-market-col:nth-child(3){border-right:1px solid #e7ebf0}.r38-market-col:nth-child(even){border-right:0}.r38-market-col:nth-child(n+3){border-top:1px solid #e7ebf0}.r38-recession{gap:5px}.r38-metric{min-height:80px;padding:9px}.r38-spark{width:58px;flex-basis:58px}.r38-info-tip{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.98);width:min(340px,86vw);font-size:13px;padding:14px 15px;border-radius:14px;box-shadow:0 18px 55px rgba(0,0,0,.20)}.r38-info:hover .r38-info-tip,.r38-info:focus .r38-info-tip{transform:translate(-50%,-50%) scale(1)}.r38-footer{text-align:left}}
 </style>""", unsafe_allow_html=True)
-# ---------- v3.39.3 redesigned frontend ----------
+# ---------- v3.39.4 redesigned frontend ----------
 import math
 
 def _esc(x): return html.escape(str(x))
@@ -1013,53 +1013,20 @@ _heatmap_active=' active' if _view=='heatmap' else ''
 _theme_next='light' if _theme=='dark' else 'dark'
 sidebar='''<aside class="r38-sidebar"><div class="r38-brand"><span class="r38-brand-mark"><svg viewBox="0 0 32 38" fill="none"><path d="M16 2.5 27 7v8.4c0 8.1-4.4 14.4-11 18.1C9.4 29.8 5 23.5 5 15.4V7L16 2.5Z" stroke="#E7EDF7" stroke-width="1.5"/><path d="m11 18 3 3 7-8" stroke="#E7EDF7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Market Risk<br>Monitor</span></div><nav class="r38-nav"><a class="r38-nav-item'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">⌂</span>대시보드</a><a class="r38-nav-item'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▦</span>S&P500 히트맵</a><div class="r38-nav-item"><span class="r38-nav-icon">◉</span>위험지수</div><div class="r38-nav-item"><span class="r38-nav-icon">≋</span>시장 상태</div><div class="r38-nav-item"><span class="r38-nav-icon">▣</span>데이터</div><div class="r38-nav-item"><span class="r38-nav-icon">♢</span>알림</div><div class="r38-nav-item"><span class="r38-nav-icon">▤</span>리포트</div><div class="r38-nav-item"><span class="r38-nav-icon">⚙</span>설정</div><div class="r38-nav-item"><span class="r38-nav-icon">?</span>도움말</div></nav><div class="r38-side-bottom"><div class="r38-side-title">최종 업데이트</div><div>'''+now_kst.strftime('%Y.%m.%d %H:%M')+'''</div><div>(한국시간 기준)</div><a class="r38-toggle" href="?view='''+_view+'''&theme='''+_theme_next+'''" target="_self">다크 모드 <span class="r38-toggle-pill'''+(' on' if _theme=='dark' else '')+'''"></span></a></div></aside><div class="r38-mobilebar"><div class="r38-mobile-brand">Market Risk Monitor</div><div class="r38-mobile-menu">☰</div></div>'''
 st.markdown(sidebar,unsafe_allow_html=True)
-st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.39.3</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
+st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.39.4</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
 
 refresh_indicator()
 
 if _view=="heatmap":
     st.markdown(
         '<section class="r38-panel"><div class="r38-section-title">S&amp;P500 히트맵</div>'
-        '<div class="r38-note">TradingView 공식 Stock Heatmap · 사이드바에서 선택할 때만 불러옵니다.</div></section>',
+        '<div class="r38-note">Finviz S&amp;P500 Map · 사이드바에서 선택할 때만 외부 지도를 불러옵니다.</div></section>',
         unsafe_allow_html=True
     )
 
-    _tv_theme = "dark" if _theme=="dark" else "light"
-    _heatmap_html = f"""
-    <!-- TradingView Widget BEGIN -->
-    <div class="tradingview-widget-container" style="height:760px;width:100%">
-      <div class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
-      <div class="tradingview-widget-copyright">
-        <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank">
-          <span class="blue-text">S&amp;P500 Heatmap</span>
-        </a>
-        <span class="trademark"> by TradingView</span>
-      </div>
-      <script type="text/javascript"
-        src="https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js"
-        async>
-      {{
-        "exchanges": [],
-        "dataSource": "SPX500",
-        "grouping": "sector",
-        "blockSize": "market_cap_basic",
-        "blockColor": "change",
-        "locale": "kr",
-        "symbolUrl": "",
-        "colorTheme": "{_tv_theme}",
-        "hasTopBar": true,
-        "isDataSetEnabled": true,
-        "isZoomEnabled": true,
-        "hasSymbolTooltip": true,
-        "isMonoSize": false,
-        "width": "100%",
-        "height": "100%"
-      }}
-      </script>
-    </div>
-    <!-- TradingView Widget END -->
-    """
-    components.html(_heatmap_html, height=790, scrolling=False)
+    _finviz_url = "https://finviz.com/map"
+    st.iframe(_finviz_url, width="stretch", height=820)
+    st.caption("※ Finviz 원본 페이지를 임베드한 테스트 버전입니다. Finviz 측 임베드 정책에 따라 표시가 제한될 수 있습니다.")
     st.stop()
 
 _structure_count=int(structure.get('count',0) or 0); _structure_raw=structure.get('level','정상')
@@ -1171,4 +1138,4 @@ with st.expander('세부 데이터 및 계산 기준'):
     st.write('경기: 실업률 30% + Sahm Rule 35% + 신규 실업수당 35%.')
     st.write('물가: CPI 25% + 근원 CPI 35% + 근원 PCE 40%.')
     st.write('데이터 공급자는 내부 표준 키와 분리되어 향후 실시간 API로 교체하기 쉽도록 유지합니다.')
-st.markdown(f'<div class="r38-footer">Risk Monitor 3.39.3 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
+st.markdown(f'<div class="r38-footer">Risk Monitor 3.39.4 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
