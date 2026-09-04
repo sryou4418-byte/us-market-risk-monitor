@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 st.set_page_config(page_title="미국 증시 위험 모니터", page_icon="🇺🇸", layout="wide")
 
-# v3.39.4 UI state must be initialized before any theme/navigation rendering.
+# v3.40.0 UI state must be initialized before any theme/navigation rendering.
 _qp = st.query_params
 _view = str(_qp.get("view", "dashboard"))
 _theme = str(_qp.get("theme", "light"))
@@ -93,6 +93,40 @@ div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:
 .r38-dark .r38-callout.warn{background:#2a2114!important;border-color:#554523!important;color:#f1dfb3!important}
 .r38-dark [data-testid="stExpander"]{background:#171e28!important;border-color:#2a3442!important}
 
+.hm-summary{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 12px;padding:14px 16px;border:1px solid #dde3eb;border-radius:12px;background:#fff}
+.hm-summary>div:first-child{display:flex;align-items:baseline;gap:10px}
+.hm-summary strong{font-size:15px;color:#1b2330}
+.hm-summary span{font-size:11px;color:#84909e}
+.hm-breadth{font-size:12px!important;font-weight:750!important;color:#5d6876!important;white-space:nowrap}
+.hm-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.hm-sector{border:1px solid #dde3eb;border-radius:12px;background:#fff;overflow:hidden;min-width:0}
+.hm-sector-head{height:42px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e5e9ef;background:#fafbfc}
+.hm-sector-head strong{font-size:13px;color:#252d38}
+.hm-sector-head span{font-size:11px;font-weight:800}
+.hm-sector-head .up{color:#e53b46}.hm-sector-head .down{color:#2f70c9}.hm-sector-head .flat{color:#88919e}
+.hm-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:#fff}
+.hm-tile{min-height:92px;padding:12px 10px;display:flex;flex-direction:column;justify-content:center;transition:transform .12s ease;box-sizing:border-box}
+.hm-tile:hover{transform:scale(.985)}
+.hm-symbol{font-size:16px;font-weight:900;letter-spacing:-.2px}
+.hm-change{margin-top:4px;font-size:13px;font-weight:850}
+.hm-name{margin-top:5px;font-size:9.5px;font-weight:650;opacity:.78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r38-dark .hm-summary,.r38-dark .hm-sector{background:#171e28;border-color:#2a3442}
+.r38-dark .hm-summary strong,.r38-dark .hm-sector-head strong{color:#f2f5f9}
+.r38-dark .hm-summary span{color:#9aa7b6}
+.r38-dark .hm-sector-head{background:#121923;border-color:#2a3442}
+.r38-dark .hm-tiles{background:#202936}
+@media(max-width:980px){.hm-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){
+  .hm-summary{align-items:flex-start;flex-direction:column;gap:7px}
+  .hm-summary>div:first-child{display:block}
+  .hm-summary>div:first-child span{display:block;margin-top:3px}
+  .hm-grid{grid-template-columns:1fr;gap:9px}
+  .hm-tile{min-height:82px;padding:10px 9px}
+  .hm-symbol{font-size:15px}
+  .hm-change{font-size:12px}
+}
+
+
 </style>""", unsafe_allow_html=True)
 
 components.html(f"""<script>
@@ -142,10 +176,144 @@ RECENT_DAYS=1000
 REFRESH_STATUS=ROOT_CACHE / "refresh_status.json"
 FX_CACHE=ROOT_CACHE / "fx_snapshot.json"
 CAPE_CACHE=ROOT_CACHE / "cape.csv"
+
+HEATMAP_CACHE=ROOT_CACHE / "sp500_light_heatmap.json"
+HEATMAP_TTL_SECONDS=600
+
+# Lightweight representative basket: 4 large/important names per GICS sector.
+# Equal tile sizes keep rendering fast; color carries the live daily move.
+HEATMAP_SECTORS={
+    "정보기술":[("AAPL","Apple"),("MSFT","Microsoft"),("NVDA","NVIDIA"),("AVGO","Broadcom")],
+    "커뮤니케이션":[("GOOGL","Alphabet"),("META","Meta"),("NFLX","Netflix"),("TMUS","T-Mobile")],
+    "경기소비재":[("AMZN","Amazon"),("TSLA","Tesla"),("HD","Home Depot"),("MCD","McDonald's")],
+    "금융":[("JPM","JPMorgan"),("V","Visa"),("MA","Mastercard"),("BAC","Bank of America")],
+    "헬스케어":[("LLY","Eli Lilly"),("JNJ","Johnson & Johnson"),("ABBV","AbbVie"),("UNH","UnitedHealth")],
+    "산업재":[("GE","GE Aerospace"),("CAT","Caterpillar"),("RTX","RTX"),("UNP","Union Pacific")],
+    "필수소비재":[("WMT","Walmart"),("COST","Costco"),("PG","Procter & Gamble"),("KO","Coca-Cola")],
+    "에너지":[("XOM","Exxon Mobil"),("CVX","Chevron"),("COP","ConocoPhillips"),("SLB","SLB")],
+    "유틸리티":[("NEE","NextEra Energy"),("SO","Southern"),("DUK","Duke Energy"),("CEG","Constellation Energy")],
+    "부동산":[("PLD","Prologis"),("AMT","American Tower"),("EQIX","Equinix"),("WELL","Welltower")],
+    "소재":[("LIN","Linde"),("SHW","Sherwin-Williams"),("FCX","Freeport-McMoRan"),("NEM","Newmont")],
+}
+
+def _read_heatmap_cache():
+    try:
+        return json.loads(HEATMAP_CACHE.read_text(encoding="utf-8"))
+    except Exception:
+        return {"updated":0,"items":{}}
+
+def _heatmap_cache_fresh():
+    return _file_fresh(HEATMAP_CACHE,HEATMAP_TTL_SECONDS)
+
+def _fetch_heatmap_snapshot(force=False):
+    cached=_read_heatmap_cache()
+    if not force and _heatmap_cache_fresh() and cached.get("items"):
+        return cached
+
+    symbols=[sym for rows in HEATMAP_SECTORS.values() for sym,_ in rows]
+    previous=cached.get("items",{})
+    items=dict(previous)
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futs={ex.submit(_fetch_yahoo_symbol,sym):sym for sym in symbols}
+        for fut,sym in futs.items():
+            try:
+                q=fut.result()
+                value=float(q.get("value",np.nan))
+                prev=float(q.get("prev",np.nan))
+                change=(value-prev)/prev*100.0 if np.isfinite(value) and np.isfinite(prev) and prev!=0 else np.nan
+                items[sym]={
+                    "value":value,
+                    "prev":prev,
+                    "change":change,
+                    "time":time.time(),
+                    "stale":False
+                }
+            except Exception:
+                if sym in items:
+                    items[sym]=dict(items[sym])
+                    items[sym]["stale"]=True
+
+    snap={"updated":time.time(),"source":"Yahoo Finance","items":items}
+    try:
+        tmp=HEATMAP_CACHE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(snap,ensure_ascii=False),encoding="utf-8")
+        tmp.replace(HEATMAP_CACHE)
+    except Exception:
+        pass
+    return snap
+
+def _heat_color(change,dark=False):
+    if not np.isfinite(change):
+        return "#313844" if dark else "#e7ebf0"
+    mag=min(abs(float(change)),5.0)/5.0
+    if change>0:
+        lo=(74,31,36) if dark else (255,238,239)
+        hi=(210,47,58) if dark else (229,59,70)
+    elif change<0:
+        lo=(27,48,77) if dark else (235,243,255)
+        hi=(43,104,190) if dark else (47,112,201)
+    else:
+        return "#313844" if dark else "#eef1f4"
+    rgb=tuple(round(lo[i]+(hi[i]-lo[i])*mag) for i in range(3))
+    return "#%02x%02x%02x"%rgb
+
+def _heat_text_color(change,dark=False):
+    if dark:
+        return "#f7f9fc"
+    if np.isfinite(change) and abs(float(change))>=2.3:
+        return "#ffffff"
+    return "#17202b"
+
+def _heatmap_html(snapshot,dark=False):
+    items=snapshot.get("items",{})
+    cards=[]
+    valid_changes=[]
+    for sector,rows in HEATMAP_SECTORS.items():
+        tiles=[]
+        sector_moves=[]
+        for sym,name in rows:
+            q=items.get(sym,{})
+            ch=float(q.get("change",np.nan)) if q else np.nan
+            if np.isfinite(ch):
+                sector_moves.append(ch)
+                valid_changes.append(ch)
+            bg=_heat_color(ch,dark)
+            fg=_heat_text_color(ch,dark)
+            val=f"{ch:+.2f}%" if np.isfinite(ch) else "N/A"
+            stale=" · 지연" if q.get("stale") else ""
+            tiles.append(
+                f'<div class="hm-tile" style="background:{bg};color:{fg}" title="{_esc(name)}">'
+                f'<div class="hm-symbol">{_esc(sym)}</div>'
+                f'<div class="hm-change">{_esc(val)}</div>'
+                f'<div class="hm-name">{_esc(name)}{stale}</div>'
+                f'</div>'
+            )
+        avg=float(np.mean(sector_moves)) if sector_moves else np.nan
+        avg_txt=f"{avg:+.2f}%" if np.isfinite(avg) else "N/A"
+        avg_cls="up" if np.isfinite(avg) and avg>0 else ("down" if np.isfinite(avg) and avg<0 else "flat")
+        cards.append(
+            f'<section class="hm-sector">'
+            f'<div class="hm-sector-head"><strong>{_esc(sector)}</strong><span class="{avg_cls}">{_esc(avg_txt)}</span></div>'
+            f'<div class="hm-tiles">{"".join(tiles)}</div>'
+            f'</section>'
+        )
+    up=sum(1 for x in valid_changes if x>0)
+    down=sum(1 for x in valid_changes if x<0)
+    flat=len(valid_changes)-up-down
+    breadth=f"상승 {up} · 하락 {down} · 보합 {flat}"
+    return (
+        '<div class="hm-summary">'
+        '<div><strong>대표 44종목 시장 맵</strong><span>11개 섹터 · 섹터별 4종목</span></div>'
+        f'<div class="hm-breadth">{breadth}</div>'
+        '</div>'
+        f'<div class="hm-grid">{"".join(cards)}</div>'
+    )
+
 CAPE_URL="https://www.multpl.com/shiller-pe/table/by-month"
 
 
-# v3.39.4 source refresh TTLs.
+# v3.40.0 source refresh TTLs.
 # UI reruns never need to hit the network merely because the user changed a view/theme.
 SERIES_TTL_SECONDS={
     "EFFR":1800,
@@ -865,7 +1033,7 @@ def delta_value(a,b):
     return d,"— 0.0","flat"
 
 
-# v3.39.4 adaptive dashboard refinement — Streamlit engine + custom HTML/CSS skin.
+# v3.40.0 adaptive dashboard refinement — Streamlit engine + custom HTML/CSS skin.
 st.markdown("""<style>
 html,body,.stApp{background:#f5f7fb!important;color:#171b23}
 header[data-testid="stHeader"]{background:transparent!important}
@@ -909,7 +1077,7 @@ div[data-testid="stButton"] button{border:1px solid #dfe4eb!important;background
 }
 @media(max-width:780px){.r38-sidebar{display:none}.block-container{padding:calc(env(safe-area-inset-top,0px) + 44px) 12px 40px!important}.r38-mobilebar{display:flex;align-items:center;justify-content:space-between;background:#101b2d;color:#fff;margin:-18px -12px 15px;padding:12px 14px}.r38-mobile-brand{font-size:13px;font-weight:800}.r38-mobile-menu{font-size:19px}.r38-title{font-size:23px}.r38-subtitle{font-size:11.5px}.r38-head-actions{display:none}.r38-panel{padding:12px 11px}.r38-section-title{font-size:15px}.r38-hero-grid{grid-template-columns:1fr}.r38-hero-card{min-height:255px}.r38-hero-main{grid-template-columns:1fr;gap:10px;min-height:auto}.r38-hero-side{justify-content:flex-start;text-align:left}.r38-side-copy{max-width:none}.r38-callout{margin-top:14px;height:auto;min-height:auto}.r38-card-title{font-size:14px}.r38-big{font-size:37px;white-space:nowrap}.r38-signal-main{font-size:31px;white-space:nowrap}.r38-risk-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.r38-market-table{grid-template-columns:repeat(2,minmax(0,1fr))}.r38-market-col,.r38-market-col:nth-child(3){border-right:1px solid #e7ebf0}.r38-market-col:nth-child(even){border-right:0}.r38-market-col:nth-child(n+3){border-top:1px solid #e7ebf0}.r38-recession{gap:5px}.r38-metric{min-height:80px;padding:9px}.r38-spark{width:58px;flex-basis:58px}.r38-info-tip{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.98);width:min(340px,86vw);font-size:13px;padding:14px 15px;border-radius:14px;box-shadow:0 18px 55px rgba(0,0,0,.20)}.r38-info:hover .r38-info-tip,.r38-info:focus .r38-info-tip{transform:translate(-50%,-50%) scale(1)}.r38-footer{text-align:left}}
 </style>""", unsafe_allow_html=True)
-# ---------- v3.39.4 redesigned frontend ----------
+# ---------- v3.40.0 redesigned frontend ----------
 import math
 
 def _esc(x): return html.escape(str(x))
@@ -1011,22 +1179,30 @@ _theme_q='dark' if _theme=='dark' else 'light'
 _dashboard_active=' active' if _view=='dashboard' else ''
 _heatmap_active=' active' if _view=='heatmap' else ''
 _theme_next='light' if _theme=='dark' else 'dark'
-sidebar='''<aside class="r38-sidebar"><div class="r38-brand"><span class="r38-brand-mark"><svg viewBox="0 0 32 38" fill="none"><path d="M16 2.5 27 7v8.4c0 8.1-4.4 14.4-11 18.1C9.4 29.8 5 23.5 5 15.4V7L16 2.5Z" stroke="#E7EDF7" stroke-width="1.5"/><path d="m11 18 3 3 7-8" stroke="#E7EDF7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Market Risk<br>Monitor</span></div><nav class="r38-nav"><a class="r38-nav-item'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">⌂</span>대시보드</a><a class="r38-nav-item'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▦</span>S&P500 히트맵</a><div class="r38-nav-item"><span class="r38-nav-icon">◉</span>위험지수</div><div class="r38-nav-item"><span class="r38-nav-icon">≋</span>시장 상태</div><div class="r38-nav-item"><span class="r38-nav-icon">▣</span>데이터</div><div class="r38-nav-item"><span class="r38-nav-icon">♢</span>알림</div><div class="r38-nav-item"><span class="r38-nav-icon">▤</span>리포트</div><div class="r38-nav-item"><span class="r38-nav-icon">⚙</span>설정</div><div class="r38-nav-item"><span class="r38-nav-icon">?</span>도움말</div></nav><div class="r38-side-bottom"><div class="r38-side-title">최종 업데이트</div><div>'''+now_kst.strftime('%Y.%m.%d %H:%M')+'''</div><div>(한국시간 기준)</div><a class="r38-toggle" href="?view='''+_view+'''&theme='''+_theme_next+'''" target="_self">다크 모드 <span class="r38-toggle-pill'''+(' on' if _theme=='dark' else '')+'''"></span></a></div></aside><div class="r38-mobilebar"><div class="r38-mobile-brand">Market Risk Monitor</div><div class="r38-mobile-menu">☰</div></div>'''
+sidebar='''<aside class="r38-sidebar"><div class="r38-brand"><span class="r38-brand-mark"><svg viewBox="0 0 32 38" fill="none"><path d="M16 2.5 27 7v8.4c0 8.1-4.4 14.4-11 18.1C9.4 29.8 5 23.5 5 15.4V7L16 2.5Z" stroke="#E7EDF7" stroke-width="1.5"/><path d="m11 18 3 3 7-8" stroke="#E7EDF7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Market Risk<br>Monitor</span></div><nav class="r38-nav"><a class="r38-nav-item'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">⌂</span>대시보드</a><a class="r38-nav-item'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▦</span>S&P500 시장 맵</a><div class="r38-nav-item"><span class="r38-nav-icon">◉</span>위험지수</div><div class="r38-nav-item"><span class="r38-nav-icon">≋</span>시장 상태</div><div class="r38-nav-item"><span class="r38-nav-icon">▣</span>데이터</div><div class="r38-nav-item"><span class="r38-nav-icon">♢</span>알림</div><div class="r38-nav-item"><span class="r38-nav-icon">▤</span>리포트</div><div class="r38-nav-item"><span class="r38-nav-icon">⚙</span>설정</div><div class="r38-nav-item"><span class="r38-nav-icon">?</span>도움말</div></nav><div class="r38-side-bottom"><div class="r38-side-title">최종 업데이트</div><div>'''+now_kst.strftime('%Y.%m.%d %H:%M')+'''</div><div>(한국시간 기준)</div><a class="r38-toggle" href="?view='''+_view+'''&theme='''+_theme_next+'''" target="_self">다크 모드 <span class="r38-toggle-pill'''+(' on' if _theme=='dark' else '')+'''"></span></a></div></aside><div class="r38-mobilebar"><div class="r38-mobile-brand">Market Risk Monitor</div><div class="r38-mobile-menu">☰</div></div>'''
 st.markdown(sidebar,unsafe_allow_html=True)
-st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.39.4</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
+st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.40.0</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
 
 refresh_indicator()
 
 if _view=="heatmap":
     st.markdown(
-        '<section class="r38-panel"><div class="r38-section-title">S&amp;P500 히트맵</div>'
-        '<div class="r38-note">Finviz S&amp;P500 Map · 사이드바에서 선택할 때만 외부 지도를 불러옵니다.</div></section>',
+        '<section class="r38-panel"><div class="r38-section-title">S&amp;P500 시장 맵</div>'
+        '<div class="r38-note">S&amp;P500의 11개 섹터에서 대표 대형주 44종목을 가볍게 추적합니다. '
+        '색상은 직전 거래일 대비 등락률이며, 상승은 빨강 · 하락은 파랑입니다. '
+        '초기 버전은 로딩 속도를 위해 모든 500종목 대신 대표 종목을 동일 크기로 표시합니다.</div></section>',
         unsafe_allow_html=True
     )
 
-    _finviz_url = "https://finviz.com/map"
-    st.iframe(_finviz_url, width="stretch", height=820)
-    st.caption("※ Finviz 원본 페이지를 임베드한 테스트 버전입니다. Finviz 측 임베드 정책에 따라 표시가 제한될 수 있습니다.")
+    _hm = _fetch_heatmap_snapshot(force=False)
+    _hm_items = _hm.get("items",{})
+    _hm_ok = sum(1 for q in _hm_items.values() if np.isfinite(float(q.get("change",np.nan))))
+    if _hm_ok:
+        st.markdown(_heatmap_html(_hm,dark=(_theme=="dark")),unsafe_allow_html=True)
+        _hm_time=datetime.fromtimestamp(_hm.get("updated",time.time()),tz=ZoneInfo("Asia/Seoul")).strftime("%H:%M KST")
+        st.caption(f"대표 종목 {_hm_ok}/44개 표시 · 데이터 캐시 10분 · 마지막 갱신 {_hm_time}")
+    else:
+        st.warning("시장 맵 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")
     st.stop()
 
 _structure_count=int(structure.get('count',0) or 0); _structure_raw=structure.get('level','정상')
@@ -1138,4 +1314,4 @@ with st.expander('세부 데이터 및 계산 기준'):
     st.write('경기: 실업률 30% + Sahm Rule 35% + 신규 실업수당 35%.')
     st.write('물가: CPI 25% + 근원 CPI 35% + 근원 PCE 40%.')
     st.write('데이터 공급자는 내부 표준 키와 분리되어 향후 실시간 API로 교체하기 쉽도록 유지합니다.')
-st.markdown(f'<div class="r38-footer">Risk Monitor 3.39.4 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
+st.markdown(f'<div class="r38-footer">Risk Monitor 3.40.0 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
