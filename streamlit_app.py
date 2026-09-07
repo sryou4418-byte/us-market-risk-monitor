@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 st.set_page_config(page_title="미국 증시 위험 모니터", page_icon="🇺🇸", layout="wide")
 
-# v3.45.0: full Market Status page + market-status sentence engine v0.2 + mobile navigation fix.
+# v3.47.0: indicator-specific Market Status criteria v0.3 + mobile heatmap fit-to-screen.
 # UI state must be initialized before any theme/navigation rendering.
 _qp = st.query_params
 _view = str(_qp.get("view", "dashboard"))
@@ -131,11 +131,19 @@ div[data-testid="stMetric"]{border:1px solid #e5e7eb;border-radius:18px;padding:
   .hm-summary{align-items:flex-start;flex-direction:column;gap:6px}
   .hm-summary>div:first-child{display:block}
   .hm-summary>div:first-child span{display:block;margin-top:3px}
-  .tm-help{font-size:10px;line-height:1.45}
-  .tm-viewport{height:72vh;min-height:540px}
-  .tm-wrap{width:1180px;height:760px;min-height:760px;max-height:none}
-  .tm-sector-label{font-size:11px;padding:4px 7px}
-  .tm-tile:focus::after{left:0;top:calc(100% + 5px);min-width:210px;max-width:260px;font-size:11px}
+  .tm-help{font-size:9.5px;line-height:1.45}
+  /* v3.46: mobile heatmap is fit-to-screen. No horizontal map canvas by default. */
+  .tm-viewport{height:auto;min-height:0;overflow:visible;border-radius:10px}
+  .tm-wrap{width:100%;height:auto;min-height:0;max-height:none;aspect-ratio:1.52/1}
+  .tm-tile{padding:1px 2px;border-width:.6px}
+  .tm-symbol{font-size:5.5px}.tm-change{font-size:4.8px;margin-top:1px}.tm-name{display:none}
+  .tm-tile.md .tm-symbol{font-size:7px}.tm-tile.md .tm-change{font-size:5.5px}
+  .tm-tile.lg .tm-symbol{font-size:9px}.tm-tile.lg .tm-change{font-size:6.5px}.tm-tile.lg .tm-name{display:none}
+  .tm-sector-label{font-size:6.5px;padding:2px 3px;border-radius:3px}
+  .tm-sector-label span{font-size:5.5px;margin-left:1px}
+  .tm-sector-outline{border-width:1.5px}
+  .tm-tile:focus{z-index:20}
+  .tm-tile:focus::after{left:0;top:calc(100% + 3px);min-width:185px;max-width:230px;font-size:10px;padding:8px 9px}
 }
 
 .news-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px}
@@ -204,8 +212,8 @@ components.html(f"""<script>
 FRED_CSV="https://fred.stlouisfed.org/graph/fredgraph.csv?id={}"
 FRED_RECENT="https://fred.stlouisfed.org/graph/fredgraph.csv?id={}&cosd={}"
 SERIES={
-    "기준금리":"EFFR","2년물":"DGS2","10년물":"DGS10","30년물":"DGS30",
-    "10년물기간프리미엄":"THREEFYTP10",
+    "기준금리":"EFFR","3개월물":"DGS3MO","2년물":"DGS2","10년물":"DGS10","30년물":"DGS30",
+    "10년물기간프리미엄":"THREEFYTP10","10년물실질금리":"DFII10",
     "하이일드스프레드":"BAMLH0A0HYM2","BBB스프레드":"BAMLC0A4CBBB",
     "CPI":"CPIAUCSL","근원CPI":"CPILFESL","근원PCE":"PCEPILFE",
     "실업률":"UNRATE","신규실업수당":"ICSA","S&P500":"SP500","VIX":"VIXCLS"
@@ -216,6 +224,7 @@ WEIGHTS={"시장·밸류에이션":.25,"변동성":.10,"금리":.25,"신용":.15
 # 완성본에서 실시간 API로 교체할 때 이 매핑/어댑터만 바꾸면 된다.
 CANONICAL_DATA={
     "EFFR":{"internal":"기준금리","provider":"FRED","symbol":"EFFR"},
+    "US3M":{"internal":"3개월물","provider":"FRED+TREASURY","symbol":"DGS3MO"},
     "US2Y":{"internal":"2년물","provider":"FRED+TREASURY","symbol":"DGS2"},
     "US10Y":{"internal":"10년물","provider":"FRED+TREASURY","symbol":"DGS10"},
     "US30Y":{"internal":"30년물","provider":"FRED+TREASURY","symbol":"DGS30"},
@@ -559,7 +568,7 @@ def _heatmap_html(snapshot,dark=False):
         f'<div class="hm-breadth">상승 {up} · 하락 {down} · 보합 {flat}</div>'
         '</div>'
         '<div class="tm-help">작은 타일은 텍스트를 생략합니다. 타일을 누르면 종목 상세가 표시됩니다. '
-        '모바일에서는 확대된 맵을 드래그하고 두 손가락 확대를 사용할 수 있습니다.</div>'
+        '모바일에서는 전체 맵을 화면 폭에 맞춰 한눈에 보이도록 축소합니다. 작은 종목은 텍스트를 생략하고 큰 타일 위주로 표시합니다.</div>'
         f'<div class="tm-viewport"><div class="tm-wrap">{"".join(blocks)}</div></div>'
     )
 
@@ -902,7 +911,7 @@ def _market_aux_v345():
         enc=quote(ticker,safe="")
         for host in ("query1.finance.yahoo.com","query2.finance.yahoo.com"):
             try:
-                url=f"https://{host}/v8/finance/chart/{enc}?range=6mo&interval=1d&includePrePost=false"
+                url=f"https://{host}/v8/finance/chart/{enc}?range=2y&interval=1d&includePrePost=false"
                 r=requests.get(url,headers=headers,timeout=(3,7)); r.raise_for_status()
                 result=r.json().get("chart",{}).get("result") or []
                 if not result: continue
@@ -930,7 +939,7 @@ def _pctile_v345(s,window=252):
     cur=float(z.iloc[-1]); return float((z<=cur).mean()*100)
 
 def _mcard_v345(title,value,state,detail=""):
-    cls={"안정":"good","정상":"good","주의":"warn","경계":"warn","위험":"bad","확인 부족":"na"}.get(state,"na")
+    cls={"안정":"good","정상":"good","관찰":"warn","주의":"warn","경계":"warn","위험":"bad","참고":"info","확인 부족":"na"}.get(state,"na")
     return f'<div class="ms-card"><div class="ms-kicker">{_esc(title)}</div><div class="ms-value">{_esc(value)}</div><div class="ms-state {cls}">{_esc(state)}</div><div class="ms-detail">{_esc(detail)}</div></div>'
 
 def _section_v345(title,body,note=""):
@@ -946,6 +955,255 @@ def _market_status_cards_v345(scores):
     return ''.join(out)
 
 
+# -----------------------------------------------------------------------------
+# Market Status indicator-specific criteria v0.3 (v3.46)
+# Common architecture is shared, but thresholds/methods differ by indicator.
+# This layer is intentionally separate from the composite 0-100 Risk Index.
+# -----------------------------------------------------------------------------
+_MS_RANK={"안정":0,"정상":0,"참고":0,"관찰":1,"주의":2,"위험":3,"확인 부족":-1}
+_MS_STATE={0:"정상",1:"관찰",2:"주의",3:"위험"}
+
+def _ms_rank_v346(state):
+    return _MS_RANK.get(state,-1)
+
+def _ms_state_v346(rank):
+    return _MS_STATE.get(max(0,min(3,int(rank))),"정상")
+
+def _ms_result_v346(state,reason="",level="—",change="—",meta=None):
+    return {"state":state,"rank":_ms_rank_v346(state),"reason":reason,"level":level,"change":change,"meta":meta or {}}
+
+def _ms_missing_v346(reason="데이터 부족"):
+    return _ms_result_v346("확인 부족",reason,"확인 부족","확인 부족")
+
+def _ms_worse_v346(*states):
+    good=[x for x in states if x in _MS_RANK and _MS_RANK[x]>=0]
+    if not good:return "확인 부족"
+    return max(good,key=lambda x:_MS_RANK[x])
+
+def _ms_raise_v346(state,minimum):
+    if state=="확인 부족": return minimum
+    return _ms_state_v346(max(_ms_rank_v346(state),_ms_rank_v346(minimum)))
+
+def _move_percentile_v346(s,n,kind="pct",mode="abs",window=504):
+    z=s.dropna().astype(float)
+    if len(z)<=max(n+30,40): return np.nan
+    mv=(z.pct_change(n)*100.0) if kind=="pct" else (z.diff(n)*100.0)
+    cur=float(mv.iloc[-1]) if pd.notna(mv.iloc[-1]) else np.nan
+    hist=mv.iloc[:-1].dropna().tail(window)
+    if pd.isna(cur) or len(hist)<30:return np.nan
+    if mode=="abs":
+        cur_cmp=abs(cur); comp=hist.abs()
+    elif mode=="up":
+        cur_cmp=cur; comp=hist
+    elif mode=="down":
+        cur_cmp=-cur; comp=-hist
+    else:
+        cur_cmp=cur; comp=hist
+    return float((((comp<cur_cmp).mean()) + 0.5*((comp==cur_cmp).mean()))*100.0)
+
+def _move_pct_text_v346(p):
+    if pd.isna(p): return "역사 비교 부족"
+    tail=max(0.1,100.0-float(p))
+    return f"최근 분포 상위 {tail:.1f}% 변동" if p>=50 else f"최근 분포 {p:.0f}백분위"
+
+def _rank_fixed_v346(v,observe,caution,danger):
+    if pd.isna(v): return -1
+    a=abs(float(v))
+    if a>=danger:return 3
+    if a>=caution:return 2
+    if a>=observe:return 1
+    return 0
+
+def _eval_equity_v346(s):
+    z=s.dropna().astype(float)
+    if len(z)<25:return _ms_missing_v346()
+    r5=_pct_ret_v02(z,5); r20=_pct_ret_v02(z,20)
+    dd=(float(z.iloc[-1]/z.tail(min(252,len(z))).max()-1.0)*100.0) if len(z) else np.nan
+    level_rank=3 if dd<=-20 else (2 if dd<=-10 else (1 if dd<=-5 else 0))
+    change_rank=0
+    if pd.notna(r5): change_rank=max(change_rank,3 if r5<=-7 else (2 if r5<=-4 else (1 if r5<=-2.5 else 0)))
+    if pd.notna(r20): change_rank=max(change_rank,3 if r20<=-12 else (2 if r20<=-8 else (1 if r20<=-5 else 0)))
+    p5=_move_percentile_v346(z,5,"pct","abs")
+    if pd.notna(r5) and r5<0 and pd.notna(p5):
+        if p5>=97.5: change_rank=max(change_rank,2)
+        elif p5>=90: change_rank=max(change_rank,1)
+    rank=max(level_rank,change_rank)
+    if level_rank>=1 and change_rank>=1 and rank<3: rank+=1
+    reason=f"5일 {r5:+.1f}% · 20일 {r20:+.1f}% · 고점 대비 {dd:.1f}%" if pd.notna(r5) and pd.notna(r20) and pd.notna(dd) else "주가 하락속도와 고점 대비 낙폭을 함께 확인"
+    return _ms_result_v346(_ms_state_v346(rank),reason,_ms_state_v346(level_rank),_ms_state_v346(change_rank),{"r5":r5,"r20":r20,"dd":dd,"p5":p5})
+
+def _eval_ma200_v346(s):
+    z=s.dropna().astype(float)
+    if len(z)<200:return _ms_missing_v346("200거래일 데이터 부족")
+    ma=z.rolling(200).mean(); dev=float((z.iloc[-1]/ma.iloc[-1]-1.0)*100.0)
+    if dev<=-12:rank=3
+    elif dev<=-7:rank=2
+    elif dev<=-3:rank=1
+    elif dev>=18:rank=2
+    elif dev>=12:rank=1
+    else:rank=0
+    side="하방 이탈" if dev<0 else ("상방 과열" if dev>=12 else "정상 범위")
+    return _ms_result_v346(_ms_state_v346(rank),f"200DMA 대비 {dev:+.1f}% · {side}",_ms_state_v346(rank),"참고",{"dev":dev})
+
+def _eval_relative_v346(v):
+    if pd.isna(v):return _ms_missing_v346()
+    rank=3 if v<=-7 else (2 if v<=-4 else (1 if v<=-2 else 0))
+    return _ms_result_v346(_ms_state_v346(rank),f"RSP가 SPY 대비 20일 {v:+.1f}%p",_ms_state_v346(rank),"참고",{"relative":v})
+
+def _eval_rate_move_v346(s,label="금리"):
+    z=s.dropna().astype(float)
+    if len(z)<25:return _ms_missing_v346()
+    c5=_point_change_v02(z,5); c20=_point_change_v02(z,20)
+    bp5=c5*100 if pd.notna(c5) else np.nan; bp20=c20*100 if pd.notna(c20) else np.nan
+    rank=max(_rank_fixed_v346(bp5,15,25,40),_rank_fixed_v346(bp20,35,55,80),0)
+    p5=_move_percentile_v346(z,5,"bp","abs"); p20=_move_percentile_v346(z,20,"bp","abs")
+    p=max([x for x in (p5,p20) if pd.notna(x)],default=np.nan)
+    if pd.notna(p):
+        if p>=97.5:rank=max(rank,2)
+        elif p>=90:rank=max(rank,1)
+    direction="급등" if (pd.notna(bp5) and bp5>0) else ("급락" if pd.notna(bp5) and bp5<0 else "변화")
+    reason=f"5일 {bp5:+.0f}bp · 20일 {bp20:+.0f}bp · {direction}" if pd.notna(bp5) and pd.notna(bp20) else f"{label} 변화속도 확인"
+    return _ms_result_v346(_ms_state_v346(rank),reason,"참고",_ms_state_v346(rank),{"bp5":bp5,"bp20":bp20,"pctl":p})
+
+def _eval_curve_v346(s,label="수익률곡선"):
+    z=s.dropna().astype(float)
+    if len(z)<22:return _ms_missing_v346()
+    cur=float(z.iloc[-1]); ch20=float((z.iloc[-1]-z.iloc[-21])*100.0)
+    level_rank=2 if cur<=-1.0 else (1 if cur<0 else 0)
+    change_rank=2 if abs(ch20)>=80 else (1 if abs(ch20)>=50 else 0)
+    if cur>=0 and float(z.iloc[-21])<0 and ch20>=25: change_rank=max(change_rank,1)
+    rank=min(2,max(level_rank,change_rank))
+    phase="역전" if cur<0 else ("정상 기울기" if cur>=0 else "")
+    reason=f"현재 {cur:+.2f}%p · 20일 {ch20:+.0f}bp · {phase}"
+    return _ms_result_v346(_ms_state_v346(rank),reason,_ms_state_v346(level_rank),_ms_state_v346(change_rank),{"spread":cur,"bp20":ch20})
+
+def _eval_vix_v346(s):
+    z=s.dropna().astype(float)
+    if len(z)<22:return _ms_missing_v346()
+    cur=latest(z); r5=_pct_ret_v02(z,5); r20=_pct_ret_v02(z,20)
+    level_rank=0 if cur<20 else (1 if cur<25 else (2 if cur<30 else 3))
+    stable=cur<15
+    change_rank=0
+    if pd.notna(r5): change_rank=max(change_rank,3 if r5>=60 else (2 if r5>=35 else (1 if r5>=20 else 0)))
+    if pd.notna(r20): change_rank=max(change_rank,3 if r20>=100 else (2 if r20>=60 else (1 if r20>=35 else 0)))
+    p5=_move_percentile_v346(z,5,"pct","up")
+    if pd.notna(p5):
+        if p5>=97.5 and pd.notna(r5) and r5>0:change_rank=max(change_rank,2)
+        elif p5>=90 and pd.notna(r5) and r5>0:change_rank=max(change_rank,1)
+    rank=max(level_rank,change_rank)
+    if level_rank>=1 and change_rank>=1 and rank<3:rank+=1
+    state="안정" if rank==0 and stable else _ms_state_v346(rank)
+    reason=f"VIX {cur:.1f} · 5일 {r5:+.1f}% · 20일 {r20:+.1f}%" if pd.notna(r5) and pd.notna(r20) else f"VIX {cur:.1f}"
+    return _ms_result_v346(state,reason,("안정" if stable else _ms_state_v346(level_rank)),_ms_state_v346(change_rank),{"value":cur,"r5":r5,"r20":r20,"p5":p5})
+
+def _eval_credit_v346(s,kind="HY"):
+    z=s.dropna().astype(float)
+    if len(z)<22:return _ms_missing_v346()
+    cur=latest(z); c5=_point_change_v02(z,5); c20=_point_change_v02(z,20)
+    bp5=c5*100 if pd.notna(c5) else np.nan; bp20=c20*100 if pd.notna(c20) else np.nan
+    if kind=="HY":
+        if cur<3.5: level_rank=0; stable=True
+        elif cur<4.5: level_rank=0; stable=False
+        elif cur<6.0: level_rank=1; stable=False
+        elif cur<8.0: level_rank=2; stable=False
+        else: level_rank=3; stable=False
+        cr5=(15,30,60); cr20=(30,60,120)
+    else:
+        if cur<1.3: level_rank=0; stable=True
+        elif cur<1.8: level_rank=0; stable=False
+        elif cur<2.5: level_rank=1; stable=False
+        elif cur<3.5: level_rank=2; stable=False
+        else: level_rank=3; stable=False
+        cr5=(8,15,30); cr20=(18,35,70)
+    change_rank=0
+    if pd.notna(bp5) and bp5>0: change_rank=max(change_rank,3 if bp5>=cr5[2] else (2 if bp5>=cr5[1] else (1 if bp5>=cr5[0] else 0)))
+    if pd.notna(bp20) and bp20>0: change_rank=max(change_rank,3 if bp20>=cr20[2] else (2 if bp20>=cr20[1] else (1 if bp20>=cr20[0] else 0)))
+    p5=_move_percentile_v346(z,5,"bp","up")
+    if pd.notna(p5) and pd.notna(bp5) and bp5>0:
+        if p5>=97.5:change_rank=max(change_rank,2)
+        elif p5>=90:change_rank=max(change_rank,1)
+    rank=max(level_rank,change_rank)
+    if level_rank>=1 and change_rank>=1 and rank<3:rank+=1
+    state="안정" if rank==0 and stable else _ms_state_v346(rank)
+    reason=f"{kind} {cur:.2f}%p · 5일 {bp5:+.0f}bp · 20일 {bp20:+.0f}bp" if pd.notna(bp5) and pd.notna(bp20) else f"{kind} {cur:.2f}%p"
+    return _ms_result_v346(state,reason,("안정" if stable else _ms_state_v346(level_rank)),_ms_state_v346(change_rank),{"value":cur,"bp5":bp5,"bp20":bp20,"p5":p5})
+
+def _eval_claims_v346(s):
+    z=s.dropna().astype(float)
+    if len(z)<20:return _ms_missing_v346()
+    avg4=z.rolling(4).mean().dropna()
+    if len(avg4)<10:return _ms_missing_v346()
+    cur=latest(avg4); ch8=_pct_ret_v02(avg4,8); p=_pctile_v345(avg4,52)
+    low52=float(avg4.tail(52).min()) if len(avg4.tail(52)) else np.nan
+    rise52=((cur/low52)-1.0)*100.0 if pd.notna(low52) and low52>0 else np.nan
+    # Claims are not abnormal merely because they make a small new 1-year high.
+    # Level alert requires a meaningful rise from the 52-week low; percentile is supporting context.
+    level_rank=3 if pd.notna(rise52) and rise52>=25 else (2 if pd.notna(rise52) and rise52>=15 else (1 if pd.notna(rise52) and rise52>=8 else 0))
+    if pd.notna(p) and p<80: level_rank=min(level_rank,1)
+    change_rank=3 if pd.notna(ch8) and ch8>=20 else (2 if pd.notna(ch8) and ch8>=10 else (1 if pd.notna(ch8) and ch8>=5 else 0))
+    rank=max(level_rank,change_rank)
+    if level_rank>=1 and change_rank>=1 and rank<3:rank+=1
+    reason=f"4주평균 {cur/1000:.0f}K · 52주 저점 대비 {rise52:+.1f}% · 약 8주 {ch8:+.1f}% · 1년 {p:.0f}백분위" if pd.notna(ch8) and pd.notna(p) and pd.notna(rise52) else f"4주평균 {cur/1000:.0f}K"
+    return _ms_result_v346(_ms_state_v346(rank),reason,_ms_state_v346(level_rank),_ms_state_v346(change_rank),{"avg4":cur,"ch8":ch8,"pctl":p,"rise52":rise52})
+
+def _eval_sahm_v346(v):
+    if pd.isna(v):return _ms_missing_v346()
+    rank=3 if v>=0.75 else (2 if v>=0.50 else (1 if v>=0.30 else 0))
+    reason=f"3개월 평균이 이전 12개월 저점 대비 {v:.2f}%p 상승"
+    return _ms_result_v346(_ms_state_v346(rank),reason,_ms_state_v346(rank),"월간",{"value":v})
+
+def _eval_inflation_v346(s,kind="CPI"):
+    z=s.dropna().astype(float)
+    if len(z)<16:return _ms_missing_v346()
+    yoy=z.pct_change(12)*100.0; ann=((z/z.shift(3))**4-1.0)*100.0
+    y=latest(yoy); a=latest(ann)
+    if pd.isna(y) or pd.isna(a):return _ms_missing_v346()
+    if kind=="Core PCE":
+        l=(2.5,3.0,4.0); m=(2.5,3.0,4.0)
+    elif kind=="Core CPI":
+        l=(3.0,3.5,4.5); m=(3.0,3.5,4.5)
+    else:
+        l=(3.0,3.5,5.0); m=(3.0,4.0,6.0)
+    level_rank=3 if y>=l[2] else (2 if y>=l[1] else (1 if y>=l[0] else 0))
+    change_rank=3 if a>=m[2] else (2 if a>=m[1] else (1 if a>=m[0] else 0))
+    if a>=y+0.5 and a>=m[0]:change_rank=max(change_rank,2)
+    rank=max(level_rank,change_rank)
+    if level_rank>=1 and change_rank>=1 and rank<3:rank+=1
+    reason=f"YoY {y:.1f}% · 3개월 연율 {a:.1f}%" + (" · 최근 재가속" if a>=y+0.5 and a>=m[0] else "")
+    return _ms_result_v346(_ms_state_v346(rank),reason,_ms_state_v346(level_rank),_ms_state_v346(change_rank),{"yoy":y,"ann3":a})
+
+def _eval_move_only_v346(s,n5=5,n20=20,kind="pct",cap="주의"):
+    z=s.dropna().astype(float)
+    if len(z)<40:return _ms_missing_v346()
+    v5=_pct_ret_v02(z,n5) if kind=="pct" else (_point_change_v02(z,n5)*100)
+    v20=_pct_ret_v02(z,n20) if kind=="pct" else (_point_change_v02(z,n20)*100)
+    p5=_move_percentile_v346(z,n5,kind,"abs"); p20=_move_percentile_v346(z,n20,kind,"abs")
+    p=max([x for x in (p5,p20) if pd.notna(x)],default=np.nan)
+    rank=0
+    if pd.notna(p):
+        if p>=97.5:rank=2
+        elif p>=90:rank=1
+    rank=min(rank,_ms_rank_v346(cap))
+    reason=(f"5일 {v5:+.1f}% · 20일 {v20:+.1f}% · {_move_pct_text_v346(p)}" if kind=="pct" and pd.notna(v5) and pd.notna(v20)
+            else f"최근 변화 · {_move_pct_text_v346(p)}")
+    return _ms_result_v346(_ms_state_v346(rank),reason,"참고",_ms_state_v346(rank),{"v5":v5,"v20":v20,"pctl":p})
+
+def _group_state_v346(results):
+    valid=[r for r in results if isinstance(r,dict) and r.get("rank",-1)>=0]
+    if not valid:return {"state":"확인 부족","count":0,"total":0}
+    rank=max(r.get("rank",0) for r in valid)
+    count=sum(1 for r in valid if r.get("rank",0)>=1)
+    return {"state":_ms_state_v346(rank),"count":count,"total":len(valid)}
+
+def _market_status_cards_v346(groups):
+    out=[]
+    for name in ("주식","금리","신용","변동성","경기","물가"):
+        g=groups.get(name,{"state":"확인 부족","count":0,"total":0})
+        detail=(f"비정상 신호 {g['count']}/{g['total']}" if g.get('total') else "판정 데이터 부족")
+        out.append(_mcard_v345(name,detail,g.get("state","확인 부족"),"지표별 기준으로 판정"))
+    return ''.join(out)
+
+
 CAPE_URL="https://www.multpl.com/shiller-pe/table/by-month"
 
 
@@ -953,7 +1211,7 @@ CAPE_URL="https://www.multpl.com/shiller-pe/table/by-month"
 # UI reruns never need to hit the network merely because the user changed a view/theme.
 SERIES_TTL_SECONDS={
     "EFFR":1800,
-    "DGS2":1800,"DGS10":1800,"DGS30":1800,
+    "DGS3MO":1800,"DGS2":1800,"DGS10":1800,"DGS30":1800,
     "SP500":1800,"VIXCLS":1800,
     "BAMLH0A0HYM2":3600,"BAMLC0A4CBBB":3600,
     "THREEFYTP10":21600,"ICSA":21600,
@@ -1059,7 +1317,7 @@ def _treasury_latest():
         d=pd.to_datetime(row.get("Date"),errors="coerce")
         if pd.isna(d): continue
         vals={}
-        for col,key in (("2 Yr","DGS2"),("10 Yr","DGS10"),("30 Yr","DGS30")):
+        for col,key in (("3 Mo","DGS3MO"),("2 Yr","DGS2"),("10 Yr","DGS10"),("30 Yr","DGS30")):
             v=pd.to_numeric(row.get(col),errors="coerce")
             if pd.notna(v): vals[key]=float(v)
         if vals: parsed.append((d,vals))
@@ -1195,7 +1453,7 @@ def _write_refresh_status(ok,errors):
 
 def _refresh_all_background(force=False):
     errors=[]
-    priority=[("기준금리","EFFR"),("2년물","DGS2"),("10년물","DGS10"),("30년물","DGS30")]
+    priority=[("기준금리","EFFR"),("3개월물","DGS3MO"),("2년물","DGS2"),("10년물","DGS10"),("30년물","DGS30")]
     need_treasury=force or not _file_fresh(_cache_file("DGS10"),TREASURY_TTL_SECONDS)
     with ThreadPoolExecutor(max_workers=6) as ex:
         fs=[ex.submit(_refresh_series,*x,force) for x in priority]
@@ -1792,10 +2050,10 @@ def _cpi_metric(s):
 def _metric_html(name,value,delta,cls,spark):
     return f'''<div class="r38-metric"><div class="r38-metric-name">{_esc(name)}</div><div class="r38-metric-row"><div><div class="r38-metric-value">{_esc(value)}</div><div class="r38-metric-delta r38-{cls}">{_esc(delta)}</div></div>{_spark_svg_38(spark,cls)}</div></div>'''
 
-fed,y2,y10,y30=data['기준금리'],data['2년물'],data['10년물'],data['30년물']
+fed,y3m,y2,y10,y30=data['기준금리'],data.get('3개월물',pd.Series(dtype=float)),data['2년물'],data['10년물'],data['30년물']
 term_premium=data.get('10년물기간프리미엄',pd.Series(dtype=float)); hy,bbb=data['하이일드스프레드'],data['BBB스프레드']
 cpi,core_cpi,core_pce=data['CPI'],data['근원CPI'],data['근원PCE']; unemp,icsa,sp,vix=data['실업률'],data['신규실업수당'],data['S&P500'],data['VIX']
-cape=_get_session_cape(); spread210=(y10-y2).dropna(); spread10fed=(y10-fed).dropna()
+cape=_get_session_cape(); spread210=(y10-y2).dropna(); spread103m=(y10-y3m).dropna() if len(y3m) else pd.Series(dtype=float); spread10fed=(y10-fed).dropna()
 snapshot=compute_snapshot(data,cape); scores=snapshot['scores']; details=snapshot['details']; structure=snapshot['structure']
 base_overall=snapshot['overall']; dev=details['market'].get('dev',np.nan); sahm_now=details['economy'].get('sahm_value',np.nan)
 zsp=sp.dropna(); prev_date=zsp.index[-2] if len(zsp)>=2 else None
@@ -1822,7 +2080,7 @@ _market_active=' active' if _view=='market' else ''
 _theme_next='light' if _theme=='dark' else 'dark'
 sidebar='''<aside class="r38-sidebar"><div class="r38-brand"><span class="r38-brand-mark"><svg viewBox="0 0 32 38" fill="none"><path d="M16 2.5 27 7v8.4c0 8.1-4.4 14.4-11 18.1C9.4 29.8 5 23.5 5 15.4V7L16 2.5Z" stroke="#E7EDF7" stroke-width="1.5"/><path d="m11 18 3 3 7-8" stroke="#E7EDF7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Market Risk<br>Monitor</span></div><nav class="r38-nav"><a class="r38-nav-item'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">⌂</span>대시보드</a><a class="r38-nav-item'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▦</span>S&P500 시장 맵</a><a class="r38-nav-item'''+_risk_active+'''" href="?view=risk&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">◉</span>위험지수</a><a class="r38-nav-item'''+_market_active+'''" href="?view=market&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">≋</span>시장 상태</a><div class="r38-nav-item"><span class="r38-nav-icon">▣</span>데이터</div><a class="r38-nav-item'''+_news_active+'''" href="?view=news&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▧</span>뉴스</a><div class="r38-nav-item"><span class="r38-nav-icon">▤</span>리포트</div><div class="r38-nav-item"><span class="r38-nav-icon">⚙</span>설정</div><div class="r38-nav-item"><span class="r38-nav-icon">?</span>도움말</div></nav><div class="r38-side-bottom"><div class="r38-side-title">최종 업데이트</div><div>'''+now_kst.strftime('%Y.%m.%d %H:%M')+'''</div><div>(한국시간 기준)</div><a class="r38-toggle" href="?view='''+_view+'''&theme='''+_theme_next+'''" target="_self">다크 모드 <span class="r38-toggle-pill'''+(' on' if _theme=='dark' else '')+'''"></span></a></div></aside><div class="r38-mobilebar"><div class="r38-mobile-brand">Market Risk Monitor</div><details class="r38-mobile-nav"><summary aria-label="메뉴 열기">☰</summary><div class="r38-mobile-drawer"><a class="r38-mobile-link'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''" target="_self">대시보드</a><a class="r38-mobile-link'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''" target="_self">S&amp;P500 시장 맵</a><a class="r38-mobile-link'''+_risk_active+'''" href="?view=risk&theme='''+_theme_q+'''" target="_self">위험지수</a><a class="r38-mobile-link'''+_market_active+'''" href="?view=market&theme='''+_theme_q+'''" target="_self">시장 상태</a><span class="r38-mobile-link disabled">데이터 · 준비 중</span><a class="r38-mobile-link'''+_news_active+'''" href="?view=news&theme='''+_theme_q+'''" target="_self">뉴스</a><div class="r38-mobile-divider"></div><a class="r38-mobile-link" href="?view='''+_view+'''&theme='''+_theme_next+'''" target="_self">다크 모드 전환</a></div></details></div>'''
 st.markdown(sidebar,unsafe_allow_html=True)
-st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.45.0</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
+st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.47.0</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
 
 refresh_indicator()
 
@@ -1830,48 +2088,26 @@ refresh_indicator()
 if _view=="market":
     st.markdown('''<style>
     .ms-hero{border:1px solid #e5e7eb;border-radius:24px;padding:22px 24px;background:rgba(255,255,255,.82);margin:8px 0 14px}.ms-hero h2{font-size:23px;margin:0 0 7px;letter-spacing:-.035em}.ms-hero p{margin:0;color:#737983;font-size:13px;line-height:1.55}
-    .ms-grid6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;margin:12px 0}.ms-grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.ms-grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.ms-card{border:1px solid #e5e7eb;border-radius:16px;padding:13px;background:rgba(255,255,255,.80);min-height:104px}.ms-kicker{font-size:11.5px;color:#777f8b;font-weight:750}.ms-value{font-size:21px;font-weight:850;margin-top:6px;letter-spacing:-.03em;color:#292d35}.ms-state{display:inline-block;margin-top:7px;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:800}.ms-state.good{background:#eaf7ef;color:#16845a}.ms-state.warn{background:#fff4dd;color:#b66a00}.ms-state.bad{background:#fff0f0;color:#d33c45}.ms-state.na{background:#f1f3f5;color:#7c838c}.ms-detail{font-size:10.5px;color:#858c96;margin-top:7px;line-height:1.4}.ms-section{border:1px solid #e5e7eb;border-radius:20px;padding:17px 18px;background:rgba(255,255,255,.76);margin:10px 0}.ms-title{font-size:15px;font-weight:850;margin-bottom:11px;color:#292d35}.ms-note{font-size:11px;color:#7c838c;margin-top:10px;line-height:1.5}.ms-list{display:grid;gap:7px}.ms-row{display:grid;grid-template-columns:1.3fr .8fr .8fr 2fr;gap:10px;align-items:center;border-top:1px solid #edf0f2;padding:9px 2px;font-size:12px}.ms-row:first-child{border-top:0}.ms-row b{font-size:12.5px}.ms-summary{font-size:14px;line-height:1.7;color:#343942;background:#f7f9fb;border-radius:14px;padding:14px 16px}.ms-badge{font-size:10px;font-weight:800;background:#eef2ff;color:#4661c9;padding:3px 7px;border-radius:999px;margin-right:6px}
-    @media(max-width:900px){.ms-grid6{grid-template-columns:repeat(2,minmax(0,1fr))}.ms-grid4{grid-template-columns:repeat(2,minmax(0,1fr))}.ms-grid3{grid-template-columns:1fr}.ms-row{grid-template-columns:1.2fr .8fr .8fr}.ms-row span:last-child{grid-column:1/-1;color:#7c838c}.ms-card{min-height:96px}.ms-hero{padding:17px}}
+    .ms-principle{border:1px solid #dfe5ef;border-radius:16px;padding:12px 14px;background:#f7f9fc;color:#5d6672;font-size:11px;line-height:1.55;margin:-4px 0 12px}.ms-principle b{color:#28313d}
+    .ms-grid6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;margin:12px 0}.ms-grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.ms-grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.ms-card{border:1px solid #e5e7eb;border-radius:16px;padding:13px;background:rgba(255,255,255,.80);min-height:112px}.ms-kicker{font-size:11.5px;color:#777f8b;font-weight:750}.ms-value{font-size:20px;font-weight:850;margin-top:6px;letter-spacing:-.03em;color:#292d35}.ms-state{display:inline-block;margin-top:7px;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:800}.ms-state.good{background:#eaf7ef;color:#16845a}.ms-state.warn{background:#fff4dd;color:#b66a00}.ms-state.bad{background:#fff0f0;color:#d33c45}.ms-state.info{background:#edf3ff;color:#4569c7}.ms-state.na{background:#f1f3f5;color:#7c838c}.ms-detail{font-size:10.3px;color:#858c96;margin-top:7px;line-height:1.45}.ms-section{border:1px solid #e5e7eb;border-radius:20px;padding:17px 18px;background:rgba(255,255,255,.76);margin:10px 0}.ms-title{font-size:15px;font-weight:850;margin-bottom:11px;color:#292d35}.ms-note{font-size:11px;color:#7c838c;margin-top:10px;line-height:1.5}.ms-list{display:grid;gap:7px}.ms-row{display:grid;grid-template-columns:1.15fr .75fr .95fr 2fr;gap:10px;align-items:center;border-top:1px solid #edf0f2;padding:9px 2px;font-size:12px}.ms-row:first-child{border-top:0}.ms-row b{font-size:12.5px}.ms-summary{font-size:14px;line-height:1.7;color:#343942;background:#f7f9fb;border-radius:14px;padding:14px 16px}.ms-badge{display:inline-block;font-size:10px;font-weight:800;background:#eef2ff;color:#4661c9;padding:3px 7px;border-radius:999px;margin:5px 6px 0 0}
+    .r38-dark .ms-hero,.r38-dark .ms-card,.r38-dark .ms-section{background:#171e28;border-color:#2a3442}.r38-dark .ms-hero h2,.r38-dark .ms-title,.r38-dark .ms-value{color:#f1f4f8}.r38-dark .ms-hero p,.r38-dark .ms-detail,.r38-dark .ms-note{color:#9ba7b5}.r38-dark .ms-principle,.r38-dark .ms-summary{background:#121923;border-color:#2a3442;color:#c5ced8}.r38-dark .ms-principle b{color:#eef2f7}
+    @media(max-width:900px){.ms-grid6{grid-template-columns:repeat(2,minmax(0,1fr))}.ms-grid4{grid-template-columns:repeat(2,minmax(0,1fr))}.ms-grid3{grid-template-columns:1fr}.ms-row{grid-template-columns:1.1fr .8fr 1fr}.ms-row span:last-child{grid-column:1/-1;color:#7c838c}.ms-card{min-height:102px}.ms-hero{padding:17px}.ms-principle{font-size:10.5px}}
     </style>''',unsafe_allow_html=True)
-    st.markdown('<div class="ms-hero"><h2>시장 상태</h2><p>지수가 왜 움직이는지, 시장 내부의 건강도와 금리·신용·변동성·경기·물가를 교차 확인합니다. 강한 결론은 여러 독립 시장축이 같은 방향으로 움직일 때만 사용합니다.</p></div>',unsafe_allow_html=True)
-    st.markdown('<div class="ms-grid6">'+_market_status_cards_v345(scores)+'</div>',unsafe_allow_html=True)
-    aux=_market_aux_v345(); diag=market_status_sentence_v02(sp,vix,y10,hy,bbb)
-    movers=[]
-    def addm(name,display,score,desc):
-        if pd.notna(score): movers.append((abs(float(score)),name,display,desc))
-    sp1=_pct_ret_v02(sp,1); addm('S&P500',('N/A' if pd.isna(sp1) else f'{sp1:+.2f}%'),(sp1 if pd.notna(sp1) else np.nan),'1일 변동 / 1% 기준')
-    y5=_point_change_v02(y10,5); addm('미국 10년물',_bp_txt_v345(y10,5),(y5*100/15 if pd.notna(y5) else np.nan),'5일 변화 / 15bp 연구 기준')
-    v1=_pct_ret_v02(vix,1); addm('VIX',('N/A' if pd.isna(v1) else f'{v1:+.1f}%'),(v1/15 if pd.notna(v1) else np.nan),'1일 변화 / 15% 기준')
-    h5=_point_change_v02(hy,5); addm('HY OAS',_bp_txt_v345(hy,5),(h5*100/15 if pd.notna(h5) else np.nan),'5일 변화 / 15bp 기준')
-    for nm,key in [('WTI','WTI'),('금','GOLD'),('은','SILVER'),('구리','COPPER')]:
-        ss=aux.get(key,pd.Series(dtype=float)); r5=_pct_ret_v02(ss,5); addm(nm,('N/A' if pd.isna(r5) else f'{r5:+.1f}%'),(r5/5 if pd.notna(r5) else np.nan),'5일 변화 / 5% 기준')
-    movers=sorted(movers,reverse=True)[:5]
-    rows=''.join(f'<div class="ms-row"><b>{_esc(n)}</b><span>{_esc(v)}</span><span>{score:.1f}×</span><span>{_esc(d)}</span></div>' for score,n,v,d in movers)
-    st.markdown(_section_v345('오늘 변화가 큰 지표 TOP 5','<div class="ms-list">'+rows+'</div>','단순 등락률 순위가 아니라 해석 가능한 기준폭 대비 움직임으로 정렬한 연구용 순위입니다.'),unsafe_allow_html=True)
-    zsp=sp.dropna(); dma=zsp.rolling(200).mean(); dev200=(float(zsp.iloc[-1]/dma.iloc[-1]-1)*100) if len(dma.dropna()) else np.nan; dd=(float(zsp.iloc[-1]/zsp.tail(252).max()-1)*100) if len(zsp) else np.nan
-    nas=aux.get('NASDAQ',pd.Series(dtype=float)); rut=aux.get('RUSSELL',pd.Series(dtype=float)); rsp=aux.get('RSP',pd.Series(dtype=float)); spy=aux.get('SPY',pd.Series(dtype=float)); rsp20=_pct_ret_v02(rsp,20); spy20=_pct_ret_v02(spy,20); ewrel=(rsp20-spy20) if pd.notna(rsp20) and pd.notna(spy20) else np.nan
-    breadth_cards=[_mcard_v345('S&P500 20일',_ret_txt_v345(sp,20),'정상' if pd.notna(_pct_ret_v02(sp,20)) and _pct_ret_v02(sp,20)>=-3 else '주의','최근 20거래일'),_mcard_v345('200DMA 이격',('N/A' if pd.isna(dev200) else f'{dev200:+.1f}%'),'정상' if pd.notna(dev200) and -5<=dev200<=10 else '주의','추세·과열 위치'),_mcard_v345('고점 대비 낙폭',('N/A' if pd.isna(dd) else f'{dd:.1f}%'),'정상' if pd.notna(dd) and dd>-10 else '주의','최근 252거래일 고점'),_mcard_v345('Nasdaq 20일',_ret_txt_v345(nas,20),'정상' if len(nas)>20 else '확인 부족','NASDAQ Composite'),_mcard_v345('Russell 2000 20일',_ret_txt_v345(rut,20),'정상' if len(rut)>20 else '확인 부족','소형주 확산 확인'),_mcard_v345('Equal Weight 상대',('N/A' if pd.isna(ewrel) else f'{ewrel:+.1f}%p'),'주의' if pd.notna(ewrel) and ewrel<-2 else ('정상' if pd.notna(ewrel) else '확인 부족'),'RSP - SPY, 20일'),_mcard_v345('상승 종목 비율','N/A','확인 부족','전용 Breadth 공급원 연결 전'),_mcard_v345('200DMA 위 종목','N/A','확인 부족','전용 Breadth 공급원 연결 전')]
-    st.markdown(_section_v345('주식시장 내부 건강도 · Breadth','<div class="ms-grid4">'+''.join(breadth_cards)+'</div>','Russell과 RSP는 내부 확산을 보는 보조 프록시입니다. 실제 상승종목 비율·200DMA 위 종목 비율·52주 신고가/신저가는 공급원 확정 후 추가합니다.'),unsafe_allow_html=True)
-    rate_cards=[_mcard_v345('EFFR',f'{latest(fed):.2f}%' if pd.notna(latest(fed)) else 'N/A','정상','미국 기준금리'),_mcard_v345('2Y',f'{latest(y2):.2f}%' if pd.notna(latest(y2)) else 'N/A','정상',f'5일 {_bp_txt_v345(y2,5)}'),_mcard_v345('10Y',f'{latest(y10):.2f}%' if pd.notna(latest(y10)) else 'N/A','주의' if diag['axes'].get('금리') else '정상',f'5일 {_bp_txt_v345(y10,5)} · 20일 {_bp_txt_v345(y10,20)}'),_mcard_v345('30Y',f'{latest(y30):.2f}%' if pd.notna(latest(y30)) else 'N/A','정상',f'20일 {_bp_txt_v345(y30,20)}'),_mcard_v345('10Y-2Y',f'{latest(spread210):+.2f}%p' if pd.notna(latest(spread210)) else 'N/A','정상','수익률곡선'),_mcard_v345('10Y-EFFR',f'{latest(spread10fed):+.2f}%p' if pd.notna(latest(spread10fed)) else 'N/A','정상','정책금리 대비')]
-    st.markdown(_section_v345('금리','<div class="ms-grid3">'+''.join(rate_cards)+'</div>'),unsafe_allow_html=True)
-    credit_cards=[_mcard_v345('HY OAS',f'{latest(hy):.2f}%p' if pd.notna(latest(hy)) else 'N/A','주의' if diag['axes'].get('신용') else '안정',f'5일 {_bp_txt_v345(hy,5)} · 20일 {_bp_txt_v345(hy,20)}'),_mcard_v345('BBB OAS',f'{latest(bbb):.2f}%p' if pd.notna(latest(bbb)) else 'N/A','주의' if diag['axes'].get('신용') else '안정',f'5일 {_bp_txt_v345(bbb,5)} · 20일 {_bp_txt_v345(bbb,20)}'),_mcard_v345('HY 1년 위치',('N/A' if pd.isna(_pctile_v345(hy)) else f'{_pctile_v345(hy):.0f}백분위'),'정상','절대수준과 변화속도 분리')]
-    st.markdown(_section_v345('신용','<div class="ms-grid3">'+''.join(credit_cards)+'</div>'),unsafe_allow_html=True)
-    vol_cards=[_mcard_v345('VIX',f'{latest(vix):.2f}' if pd.notna(latest(vix)) else 'N/A','주의' if diag['axes'].get('변동성') else '정상',f'5일 {_ret_txt_v345(vix,5)} · 20일 {_ret_txt_v345(vix,20)}'),_mcard_v345('VIX 1년 위치',('N/A' if pd.isna(_pctile_v345(vix)) else f'{_pctile_v345(vix):.0f}백분위'),'정상','단독 위기판정 금지')]
-    st.markdown(_section_v345('변동성','<div class="ms-grid3">'+''.join(vol_cards)+'</div>'),unsafe_allow_html=True)
-    claims4=icsa.dropna().rolling(4).mean(); claims8=_pct_ret_v02(claims4,8)
-    eco_cards=[_mcard_v345('실업률',f'{latest(unemp):.1f}%' if pd.notna(latest(unemp)) else 'N/A','주의' if scores.get('경기',0)>=60 else '정상','월간'),_mcard_v345('Sahm Rule',f'{sahm_now:.2f}%p' if pd.notna(sahm_now) else 'N/A','주의' if pd.notna(sahm_now) and sahm_now>=.5 else '정상','실업수당 확인과 함께 해석'),_mcard_v345('신규실업수당 4주평균',f'{latest(claims4)/1000:.0f}K' if pd.notna(latest(claims4)) else 'N/A','주의' if pd.notna(claims8) and claims8>=10 else '정상',('약 8주 N/A' if pd.isna(claims8) else f'약 8주 {claims8:+.1f}%'))]
-    st.markdown(_section_v345('경기 · 고용','<div class="ms-grid3">'+''.join(eco_cards)+'</div>'),unsafe_allow_html=True)
-    def inf_card(name,ser):
-        yoy=ser.pct_change(12)*100; ann=((ser/ser.shift(3))**4-1)*100; y=latest(yoy); a=latest(ann); state='주의' if pd.notna(a) and a>=3 and (pd.isna(y) or a>=y) else '정상'; return _mcard_v345(name,('N/A' if pd.isna(y) else f'{y:.1f}% YoY'),state,('3개월 연율 N/A' if pd.isna(a) else f'3개월 연율 {a:.1f}%'))
-    st.markdown(_section_v345('물가','<div class="ms-grid3">'+''.join([inf_card('CPI',cpi),inf_card('근원 CPI',core_cpi),inf_card('근원 PCE',core_pce)])+'</div>','연간 물가와 최근 3개월 연율을 분리해 재가속 여부를 확인합니다.'),unsafe_allow_html=True)
-    def aux_card(title,key,prefix=''):
-        ss=aux.get(key,pd.Series(dtype=float)); val=latest(ss); return _mcard_v345(title,('N/A' if pd.isna(val) else f'{prefix}{val:,.2f}'),'정상' if pd.notna(val) else '확인 부족',f'5일 {_ret_txt_v345(ss,5)} · 20일 {_ret_txt_v345(ss,20)}')
-    st.markdown(_section_v345('FX','<div class="ms-grid3">'+''.join([aux_card('DXY','DXY'),aux_card('USD/KRW','USDKRW'),aux_card('USD/JPY','USDJPY')])+'</div>'),unsafe_allow_html=True)
-    st.markdown(_section_v345('원자재','<div class="ms-grid4">'+''.join([aux_card('WTI','WTI','$'),aux_card('금','GOLD','$'),aux_card('은','SILVER','$'),aux_card('구리','COPPER','$')])+'</div>','원자재는 단독으로 경기침체·공포·인플레이션을 단정하지 않고 관련 지표와 교차 확인합니다.'),unsafe_allow_html=True)
-    axes=', '.join(diag['active_axes']) if diag['active_axes'] else '뚜렷한 단기 스트레스 축 없음'
-    st.markdown(_section_v345('시장 종합 해석',f'<div class="ms-summary">{_esc(diag["sentence"])}<br><span class="ms-badge">신뢰도 {diag["confidence"]}</span><span class="ms-badge">활성축 {diag["axis_count"]}개</span><br><span style="font-size:11px;color:#7c838c">현재 확인: {_esc(axes)}</span></div>','v0.2 결정론적 문장엔진. 생성형 AI 호출 없이 같은 데이터에는 같은 판단을 냅니다.'),unsafe_allow_html=True)
-    st.caption('시장 상태 페이지 v0.1 UI · 문장엔진 v0.2 · Breadth 전용 공급원은 다음 단계에서 연결 예정')
+
+    from market_view import render as render_market_v347
+    aux=_market_aux_v345()
+    market_data=dict(aux)
+    market_data.update({
+        'SP500':sp,'US3M':data.get('3개월물',pd.Series(dtype=float)),
+        'US2Y':y2,'US10Y':y10,'US30Y':y30,'EFFR':fed,
+        'REAL10':data.get('10년물실질금리',pd.Series(dtype=float)),
+        'TERM':data.get('10년물기간프리미엄',pd.Series(dtype=float)),
+        'HY':hy,'BBB':bbb,'VIX':vix,'UNEMP':unemp,'CLAIMS':icsa,
+        'CPI':cpi,'CORECPI':core_cpi,'COREPCE':core_pce,'CAPE':cape,
+    })
+    render_market_v347(st,market_data)
     st.stop()
+
 
 if _view=="heatmap":
     st.markdown(
@@ -2105,4 +2341,4 @@ with st.expander('세부 데이터 및 계산 기준'):
     st.write('경기: 실업률 30% + Sahm Rule 35% + 신규 실업수당 35%.')
     st.write('물가: CPI 25% + 근원 CPI 35% + 근원 PCE 40%.')
     st.write('데이터 공급자는 내부 표준 키와 분리되어 향후 실시간 API로 교체하기 쉽도록 유지합니다.')
-st.markdown(f'<div class="r38-footer">Risk Monitor 3.45.0 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
+st.markdown(f'<div class="r38-footer">Risk Monitor 3.47.0 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
