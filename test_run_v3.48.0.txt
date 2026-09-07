@@ -1,0 +1,70 @@
+2026-09-07 09:46:50.841 WARNING streamlit.runtime.caching.cache_data_api: No runtime found, using MemoryCacheStorageManager
+test_cache_key_changes_with_values (test_loading.LoadingTests.test_cache_key_changes_with_values) ... 2026-09-07 09:46:50.843 WARNING streamlit.runtime.caching.cache_data_api: No runtime found, using MemoryCacheStorageManager
+ok
+test_classification_no_risk (test_loading.LoadingTests.test_classification_no_risk) ... ok
+test_cold_bootstrap_shows_shell_without_waiting (test_loading.LoadingTests.test_cold_bootstrap_shows_shell_without_waiting) ... 2026-09-07 09:46:50.878 WARNING streamlit.runtime.scriptrunner_utils.script_run_context: Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-09-07 09:46:51.318 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+ok
+test_dedup_and_retry (test_loading.LoadingTests.test_dedup_and_retry) ... ok
+test_full_routes_with_cached_data (test_loading.LoadingTests.test_full_routes_with_cached_data) ... 2026-09-07 09:46:51.692 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-09-07 09:46:52.157 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-09-07 09:46:52.334 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-09-07 09:46:52.678 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-09-07 09:46:52.771 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-09-07 09:46:53.066 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-09-07 09:46:53.412 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-09-07 09:46:53.682 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+ok
+test_news_no_engine_dependency (test_loading.LoadingTests.test_news_no_engine_dependency) ... ok
+test_news_page_without_core_or_network (test_loading.LoadingTests.test_news_page_without_core_or_network) ... 2026-09-07 09:46:53.693 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-09-07 09:46:53.995 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-09-07 09:46:54.114 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+ok
+test_parallel_bound_and_success_on_failure (test_loading.LoadingTests.test_parallel_bound_and_success_on_failure) ... ok
+test_parser_invalid_and_duplicates (test_loading.LoadingTests.test_parser_invalid_and_duplicates) ... ok
+test_stale_returns_immediately_and_failure_preserves (test_loading.LoadingTests.test_stale_returns_immediately_and_failure_preserves) ... ok
+test_all_registered (test_market.TestMarket.test_all_registered) ... ok
+test_aux_large_move_capped (test_market.TestMarket.test_aux_large_move_capped) ... ok
+test_breadth_invalid_unit (test_market.TestMarket.test_breadth_invalid_unit) ... ok
+test_complete_fixture (test_market.TestMarket.test_complete_fixture) ... ok
+test_copper_does_not_invent_supply (test_market.TestMarket.test_copper_does_not_invent_supply) ... ok
+test_credit_single_axis (test_market.TestMarket.test_credit_single_axis) ... ok
+test_deflation_flag (test_market.TestMarket.test_deflation_flag) ... ok
+test_equity_not_double_counted (test_market.TestMarket.test_equity_not_double_counted) ... ok
+test_flat_history_midpoint (test_market.TestMarket.test_flat_history_midpoint) ... ok
+test_future_is_ignored (test_market.TestMarket.test_future_is_ignored) ... ok
+test_gold_opportunity_cost (test_market.TestMarket.test_gold_opportunity_cost) ... ok
+test_gold_safe_haven_requires_axes (test_market.TestMarket.test_gold_safe_haven_requires_axes) ... ok
+test_history_minimum (test_market.TestMarket.test_history_minimum) ... ok
+test_monthly_missing_period (test_market.TestMarket.test_monthly_missing_period) ... ok
+test_monthly_repeated_days (test_market.TestMarket.test_monthly_repeated_days) ... ok
+test_named_series_relative_alignment (test_market.TestMarket.test_named_series_relative_alignment) ... ok
+test_negative_oil (test_market.TestMarket.test_negative_oil) ... ok
+test_no_positive_ma_stress (test_market.TestMarket.test_no_positive_ma_stress) ... ok
+test_no_small_gold_alarm (test_market.TestMarket.test_no_small_gold_alarm) ... ok
+test_nonfinite_filtered (test_market.TestMarket.test_nonfinite_filtered) ... ok
+test_renders_every_indicator_and_escapes (test_market.TestMarket.test_renders_every_indicator_and_escapes) ... ok
+test_reversal_counter (test_market.TestMarket.test_reversal_counter) ... ok
+test_sahm_previous_window (test_market.TestMarket.test_sahm_previous_window) ... ok
+test_stale_not_cross_evidence (test_market.TestMarket.test_stale_not_cross_evidence) ... ok
+test_market_screen (test_streamlit.TestStreamlit.test_market_screen) ... 2026-09-07 09:47:00.559 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+ok
+
+----------------------------------------------------------------------
+Ran 35 tests in 10.239s
+
+OK

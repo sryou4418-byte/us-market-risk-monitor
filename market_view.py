@@ -1,10 +1,16 @@
 """Market page rendering; pure engine results, HTML escaped at boundaries."""
 import html
 import pandas as pd
+import streamlit as st
 from market_engine import REGISTRY, evaluate, clean, percentile, pct
 
+@st.cache_data(ttl=300,max_entries=8,show_spinner=False)
+def cached_evaluate(data,asof):
+    return evaluate(data,asof)
+
 def render(st,data,asof=None):
-    report=evaluate(data,asof)
+    cutoff=str(pd.Timestamp(asof if asof is not None else pd.Timestamp.now(tz='UTC')).date())
+    report=cached_evaluate(data,cutoff)
     esc=lambda x:html.escape(str(x))
     st.markdown('<div class="ms-hero"><h2>시장 상태</h2><p>현재 수준 · 변화속도 · 반복 여부 · 함께 움직이는 지표를 확인합니다.</p></div>',unsafe_allow_html=True)
     st.caption('시장 상태 v0.4 · 연구용 기준 · 개별 경보는 시장 전체 위험점수와 다른 개념입니다.')

@@ -1,0 +1,49 @@
+{
+  "calendar_source": "SPY",
+  "partial_coverage": true,
+  "type": "retrospective_revised_observations",
+  "asof": "2026-09-05",
+  "start": "2025-09-09",
+  "end": "2026-09-04",
+  "days": 250,
+  "available_sources": [
+    "BBB",
+    "COPPER",
+    "EFFR",
+    "GOLD",
+    "HY",
+    "RSP",
+    "RUSSELL",
+    "SILVER",
+    "SPY",
+    "TERM",
+    "UNEMP",
+    "VIX"
+  ],
+  "source_errors": {
+    "SP500": "not_available_in_offline_input",
+    "US3M": "not_available_in_offline_input",
+    "US2Y": "not_available_in_offline_input",
+    "US10Y": "not_available_in_offline_input",
+    "US30Y": "not_available_in_offline_input",
+    "REAL10": "not_available_in_offline_input",
+    "CLAIMS": "not_available_in_offline_input",
+    "CPI": "not_available_in_offline_input",
+    "CORECPI": "not_available_in_offline_input",
+    "COREPCE": "not_available_in_offline_input",
+    "NASDAQ": "not_available_in_offline_input",
+    "WTI": "not_available_in_offline_input",
+    "DXY": "not_available_in_offline_input",
+    "USDKRW": "not_available_in_offline_input",
+    "USDJPY": "not_available_in_offline_input"
+  },
+  "not_connected": [
+    "CAPE",
+    "ADV",
+    "ABOVE200",
+    "HILO"
+  ],
+  "point_in_time": false,
+  "trading_returns_tested": false,
+  "thresholds_calibrated": false
+}

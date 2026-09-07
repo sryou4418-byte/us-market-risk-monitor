@@ -1,0 +1,28 @@
+{
+  "parser_rows": 1253,
+  "parser_old_s": 0.5341104380004253,
+  "parser_new_s": 0.00847427600001538,
+  "parser_equal": true,
+  "simulated_delay_s": 0.05,
+  "simulated_serial_s": 0.5517197230001329,
+  "simulated_parallel_s": 0.15209662300003401,
+  "market_cold_s": 0.1076413330001742,
+  "market_cached_s": 0.0035712110002350528,
+  "market_sources": 12,
+  "risk_functions_ast_identical": [
+    "compute_snapshot",
+    "weighted",
+    "structural_signals",
+    "rapid_alert",
+    "signal_floor",
+    "apply_risk_floors",
+    "market_risk_score",
+    "volatility_score",
+    "rate_score",
+    "credit_score",
+    "economy_score",
+    "inflation_score"
+  ],
+  "market_engine_unchanged": true,
+  "real_end_to_end_network_benchmark": false
+}

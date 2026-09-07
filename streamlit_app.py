@@ -4,14 +4,20 @@ import pandas as pd
 import numpy as np
 import requests, csv, os, threading, shutil, json, time, re, html
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path as _Path
 from urllib.parse import quote
 
+from loading_service import start as start_job, status as job_status
+from news_categories import CATEGORIES, QUERIES, select as select_news
+from market_loader import load as load_market_aux
+
+def _esc(x): return html.escape(str(x))
+
 st.set_page_config(page_title="미국 증시 위험 모니터", page_icon="🇺🇸", layout="wide")
 
-# v3.47.0: indicator-specific Market Status criteria v0.3 + mobile heatmap fit-to-screen.
+# v3.48.0: indicator-specific Market Status criteria v0.3 + mobile heatmap fit-to-screen.
 # UI state must be initialized before any theme/navigation rendering.
 _qp = st.query_params
 _view = str(_qp.get("view", "dashboard"))
@@ -575,12 +581,7 @@ def _heatmap_html(snapshot,dark=False):
 
 NEWS_CACHE=ROOT_CACHE / "korean_econ_news.json"
 NEWS_TTL_SECONDS=600
-NEWS_QUERIES=[
-    ("미국 증시","뉴욕증시 OR 미국증시 OR S&P500 when:2d"),
-    ("연준·금리","연준 OR FOMC OR 미국금리 OR 미국국채 when:3d"),
-    ("물가·고용","미국 CPI OR 미국 PCE OR 미국 고용 OR 미국 실업률 when:4d"),
-    ("경제·기업","미국 경제 OR 월가 OR 미국 기업실적 when:2d"),
-]
+NEWS_QUERIES=QUERIES
 
 def _read_news_cache():
     try: return json.loads(NEWS_CACHE.read_text(encoding="utf-8"))
@@ -631,7 +632,7 @@ def _fetch_news_snapshot(force=False):
         if not k or k in seen: continue
         seen.add(k); clean.append(q)
     if clean:
-        snap={"updated":time.time(),"items":clean[:48],"errors":errors,"source":"Google News RSS"}
+        snap={"updated":time.time(),"items":clean[:144],"errors":errors,"source":"Google News RSS"}
         _write_json_atomic(NEWS_CACHE,snap); return snap
     if cached.get("items"):
         cached=dict(cached); cached["stale"]=True; return cached
@@ -654,7 +655,7 @@ def _news_html(items):
         cards.append(
             '<article class="news-card">'
             f'<div class="news-meta"><span class="news-category">{_esc(q.get("category",""))}</span>'
-            f'<span>{_esc(q.get("source",""))}</span><span>·</span><span>{_esc(_news_when(q.get("published",0)))}</span></div>'
+            f'<span>{_esc(" · ".join(q.get("tags",[])))}</span><span>{_esc(q.get("source",""))}</span><span>·</span><span>{_esc(_news_when(q.get("published",0)))}</span></div>'
             f'<a class="news-title" href="{_esc(q.get("link",""))}" target="_blank" rel="noopener noreferrer">{_esc(q.get("title",""))}</a>'
             '<div class="news-go">기사 보기 ↗</div></article>'
         )
@@ -903,29 +904,24 @@ def market_status_sentence_v02(sp,vix,y10,hy,bbb):
     return {"sentence":sentence,"axes":persistent,"raw_axes":axes,"active_axes":active,"axis_count":count,"confidence":confidence,"strength":strength,"metrics":metrics}
 
 
-@st.cache_data(ttl=600,show_spinner=False)
 def _market_aux_v345():
-    tickers={"NASDAQ":"^IXIC","RUSSELL":"^RUT","RSP":"RSP","SPY":"SPY","GOLD":"GC=F","SILVER":"SI=F","COPPER":"HG=F","WTI":"CL=F","DXY":"DX-Y.NYB","USDKRW":"USDKRW=X","USDJPY":"USDJPY=X"}
-    out={}; headers={"User-Agent":"Mozilla/5.0"}
-    for name,ticker in tickers.items():
-        enc=quote(ticker,safe="")
-        for host in ("query1.finance.yahoo.com","query2.finance.yahoo.com"):
-            try:
-                url=f"https://{host}/v8/finance/chart/{enc}?range=2y&interval=1d&includePrePost=false"
-                r=requests.get(url,headers=headers,timeout=(3,7)); r.raise_for_status()
-                result=r.json().get("chart",{}).get("result") or []
-                if not result: continue
-                row=result[0]; ts=row.get("timestamp") or []; closes=(row.get("indicators",{}).get("quote") or [{}])[0].get("close") or []
-                vals=[]; dates=[]
-                for t,v in zip(ts,closes):
-                    if v is not None:
-                        dates.append(pd.to_datetime(t,unit="s")); vals.append(float(v))
-                ser=pd.Series(vals,index=pd.DatetimeIndex(dates),dtype=float).sort_index()
-                if len(ser): out[name]=ser
-                break
-            except Exception:
-                pass
+    path=ROOT_CACHE / 'market_aux_v348.json'
+    out,state,_=load_market_aux(path,force=bool(globals().get('_manual_refresh',False)))
+    if state.get('running'):
+        @st.fragment(run_every='2s')
+        def aux_progress():
+            # Each completed symbol is persisted atomically. Rerun uses new data.
+            st.caption('보조 시장 데이터 확인 중… 준비된 지표부터 표시합니다.')
+            stamp=path.stat().st_mtime_ns if path.exists() else 0
+            old=st.session_state.get('_aux_stamp348',-1)
+            if stamp!=old or not job_status(path).get('running'):
+                st.session_state['_aux_stamp348']=stamp
+                st.rerun()
+        aux_progress()
+    elif state.get('error'):
+        st.caption('일부 보조 데이터 갱신 실패 · 관측일과 자료 부족 표시를 확인하세요.')
     return out
+
 
 def _ret_txt_v345(s,n):
     v=_pct_ret_v02(s,n); return "N/A" if pd.isna(v) else f"{v:+.1f}%"
@@ -1257,21 +1253,16 @@ _migrate_legacy_cache()
 
 
 def _parse_fred(text,series):
-    text=text.lstrip("\ufeff").strip(); lines=text.splitlines(); header=None; hi=None
-    for i,line in enumerate(lines[:30]):
-        row=next(csv.reader([line]))
-        if "observation_date" in row and series in row:
-            header=row; hi=i; break
-    if header is None: raise ValueError(f"{series}: FRED CSV 헤더 없음")
-    di,vi=header.index("observation_date"),header.index(series); rec=[]
-    for row in csv.reader(lines[hi+1:]):
-        if len(row)<=max(di,vi): continue
-        d=pd.to_datetime(row[di],errors="coerce"); v=pd.to_numeric(row[vi],errors="coerce")
-        if pd.notna(d) and pd.notna(v): rec.append((d,float(v)))
-    if not rec: raise ValueError(f"{series}: 유효 데이터 없음")
-    df=pd.DataFrame(rec,columns=["date",series]).drop_duplicates("date").sort_values("date")
-    s=df.set_index("date")[series].astype(float); s.index=pd.DatetimeIndex(s.index)
-    return s.dropna()
+    from io import StringIO
+    lines=text.lstrip('\ufeff').splitlines()
+    header=next((i for i,line in enumerate(lines[:30]) if 'observation_date' in next(csv.reader([line])) and series in next(csv.reader([line]))),None)
+    if header is None: raise ValueError(f'{series}: FRED CSV 헤더 없음')
+    df=pd.read_csv(StringIO('\n'.join(lines[header:])),usecols=['observation_date',series],dtype=str)
+    df['date']=pd.to_datetime(df['observation_date'],errors='coerce')
+    df[series]=pd.to_numeric(df[series],errors='coerce')
+    df=df.dropna(subset=['date',series]).drop_duplicates('date',keep='first').sort_values('date')
+    if df.empty:raise ValueError(f'{series}: 유효 데이터 없음')
+    return df.set_index('date')[series].astype(float)
 
 
 def _fetch(series,recent=False):
@@ -1344,7 +1335,9 @@ def _initial_fetch():
             s=_fetch(sid,recent=True); _write_cache(sid,s); return name,s,None
         except Exception as e: return name,pd.Series(dtype=float),f"{name} ({sid}): {e}"
     with ThreadPoolExecutor(max_workers=10) as ex:
-        futures=[ex.submit(one,x) for x in SERIES.items()]
+        required={'기준금리','2년물','10년물','하이일드스프레드','CPI','실업률','S&P500','VIX'}
+        ordered=sorted(SERIES.items(),key=lambda item:item[0] not in required)
+        futures=[ex.submit(one,x) for x in ordered]
         for f in as_completed(futures):
             name,s,err=f.result(); out[name]=s
             if err: errors.append(err)
@@ -1480,7 +1473,7 @@ def _refresh_all_background(force=False):
         for f in as_completed(futures):
             _,_,err=f.result()
             if err: errors.append(err)
-    _write_refresh_status(True,errors)
+    _write_refresh_status(not errors,errors)
 
 
 def _status_mtime():
@@ -1530,13 +1523,116 @@ def _invalidate_session_market_cache():
         st.session_state.pop(k,None)
 
 
+# v3.43.1 adaptive dashboard refinement — Streamlit engine + custom HTML/CSS skin.
+st.markdown("""<style>
+html,body,.stApp{background:#f5f7fb!important;color:#171b23}
+header[data-testid="stHeader"]{background:transparent!important}
+.block-container{max-width:none!important;padding:26px 28px 54px 188px!important}
+[data-testid="stSidebar"]{display:none!important}[data-testid="stToolbar"]{right:10px!important}#MainMenu{visibility:hidden}
+[data-testid="stSidebar"]{width:286px!important;min-width:286px!important}
+[data-testid="stSidebar"]>div:first-child{width:286px!important}
+.r38-sidebar{position:fixed;z-index:50;left:0;top:0;bottom:0;width:158px;background:linear-gradient(180deg,#101b2d,#0d1726);color:#fff;padding:22px 13px 18px;box-sizing:border-box}.r38-brand{display:flex;align-items:center;gap:9px;padding:0 9px 20px;font-size:14px;font-weight:800;line-height:1.25}.r38-brand-mark{width:27px;height:32px}.r38-brand-mark svg{width:27px;height:32px}.r38-nav{display:flex;flex-direction:column;gap:6px}.r38-nav-item{display:flex;align-items:center;gap:11px;height:42px;border-radius:7px;padding:0 11px;color:#aeb9c9;font-size:13.5px;font-weight:650;text-decoration:none!important}.r38-nav-item.active{background:linear-gradient(90deg,#365dce,#506be6);color:#fff;box-shadow:0 5px 16px rgba(45,78,190,.28)}.r38-nav-icon{width:17px;text-align:center;font-size:15px}.r38-side-bottom{position:absolute;left:20px;right:20px;bottom:20px;border-top:1px solid rgba(255,255,255,.08);padding-top:16px;color:#9eabba;font-size:11px;line-height:1.55}.r38-side-title{color:#dbe3ef;font-weight:700}.r38-toggle{display:flex;align-items:center;justify-content:space-between;margin-top:16px;color:#9eabba!important;text-decoration:none!important}.r38-toggle-pill{width:34px;height:18px;border-radius:999px;background:#566274;position:relative}.r38-toggle-pill:after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:#d9dee6;left:2px;top:2px;transition:.15s}.r38-toggle-pill.on{background:#4469d8}.r38-toggle-pill.on:after{left:18px;background:#fff}
+.r38-mobilebar{display:none}.r38-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}.r38-title{font-size:30px;font-weight:850;letter-spacing:-.045em;line-height:1.18}.r38-subtitle{font-size:15px;color:#69717d;margin-top:6px}.r38-credit{font-size:12px;color:#939aa5;margin-top:3px}.r38-head-actions{display:flex;gap:10px}.r38-action{cursor:pointer;height:44px;border:1px solid #dfe4eb;border-radius:8px;background:#fff;padding:0 15px;display:flex;align-items:center;font-size:14px;font-weight:650;color:#3c4654;text-decoration:none!important}
+.r38-panel{background:#fff;border:1px solid #dde3eb;border-radius:12px;padding:19px;margin-bottom:15px;box-shadow:0 1px 2px rgba(25,38,58,.025)}.r38-section-title{display:flex;align-items:center;gap:7px;font-size:18px;font-weight:820;color:#202631;margin-bottom:15px}
+.r38-info{position:relative;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border:1px solid #9da5af;border-radius:50%;font-size:9px;color:#7d8590;font-weight:800;cursor:help;outline:none;flex:0 0 15px}.r38-info:hover,.r38-info:focus{background:#eef2f7;color:#37404b;border-color:#66717e}.r38-info-tip{visibility:hidden;opacity:0;pointer-events:none;position:absolute;z-index:9999;left:50%;top:23px;transform:translateX(-50%) translateY(-3px);width:min(330px,78vw);padding:12px 13px;border:1px solid #dfe4ea;border-radius:11px;background:#fff;box-shadow:0 12px 32px rgba(13,24,40,.15);font-size:12.5px;font-weight:550;line-height:1.55;color:#414955;text-align:left;white-space:normal;transition:opacity .12s ease,transform .12s ease}.r38-info:hover .r38-info-tip,.r38-info:focus .r38-info-tip{visibility:visible;opacity:1;transform:translateX(-50%) translateY(0)}
+.r38-hero-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;align-items:stretch}.r38-hero-card{position:relative;min-height:306px;height:100%;border:1px solid #e3e7ed;border-radius:11px;padding:19px 19px 17px;box-sizing:border-box;background:#fff;overflow:visible;display:flex;flex-direction:column}.r38-hero-card.danger{border-color:#f0dddd}.r38-hero-card.warn{border-color:#f0e4cf}.r38-card-title{font-size:16.5px;font-weight:800;color:#3a4049;display:flex;align-items:center;gap:6px}.r38-horizon{font-size:12.5px;color:#8b929d;margin-top:4px}.r38-hero-main{display:grid;grid-template-columns:minmax(0,1fr) minmax(145px,38%);align-items:center;gap:18px;margin-top:18px;min-height:126px;flex:1}.r38-hero-left{min-width:0}.r38-hero-side{min-width:0;display:flex;align-items:center;justify-content:flex-start;text-align:left}.r38-big{font-size:45px;font-weight:850;line-height:1;white-space:nowrap;letter-spacing:-.05em}.r38-big.red{color:#d92f3b}.r38-big.orange{color:#d77b00}.r38-unit{font-size:14px;font-weight:650;white-space:nowrap;color:#555d68;margin-left:4px}.r38-badge{display:inline-flex;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800;margin-top:9px}.r38-badge.red{color:#fff;background:#e83d49}.r38-badge.orange{color:#fff;background:#f09a18}.r38-badge.green{color:#fff;background:#2ca675}.r38-badge.gray{color:#5e6672;background:#eef1f5}.r38-delta-label{font-size:12px;color:#737b87}.r38-delta{font-size:14px;margin-top:4px;font-weight:800}.r38-up{color:#e03b45}.r38-down{color:#2f70c9}.r38-flat{color:#7b8490}.r38-side-copy{font-size:13.5px;line-height:1.5;color:#616a76;font-weight:700;max-width:185px}.r38-side-copy strong{display:block;font-size:14.5px;color:#343b45;margin-bottom:4px}.r38-signal-main{font-size:38px;font-weight:850;white-space:nowrap;line-height:1.05;letter-spacing:-.035em;color:#252b34}.r38-signal-meta{font-size:13px;color:#707985;margin-top:8px;font-weight:700}.r38-callout{position:static;margin-top:12px;height:72px;min-height:72px;box-sizing:border-box;border-radius:8px;padding:12px 13px;font-size:12.5px;line-height:1.5;background:#fff6f6;border:1px solid #f5dede;color:#5c3b3e;display:flex;flex-direction:column;justify-content:center}.r38-callout.warn{background:#fff9ef;border-color:#f3e4c9;color:#69523a}.r38-summary-lines{display:flex;flex-direction:column;gap:3px}.r38-summary-lines b{font-weight:820}.r38-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}.r38-chip{display:inline-flex;align-items:center;min-height:25px;box-sizing:border-box;padding:4px 8px;border-radius:999px;background:#fff0f0;border:1px solid #f3d3d3;color:#c33b42;font-size:11.5px;font-weight:750;line-height:1.2;white-space:nowrap}.r38-chip.warn{background:#fff5e7;border-color:#f0ddbd;color:#a76600}.r38-interpret{margin-top:12px;padding:14px 16px;border-radius:9px;background:#eef7ff;border:1px solid #d6e9f9;font-size:13.5px;line-height:1.6;color:#294862;font-weight:620}.r38-interpret-label{font-weight:850;color:#1f6598;margin-right:9px;white-space:nowrap}
+.r38-risk-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px}.r38-risk-card{border:1px solid #e2e7ed;border-radius:9px;padding:15px 12px 13px;min-height:158px}.r38-risk-top{display:flex;align-items:center;gap:8px}.r38-risk-icon{width:28px;height:28px;border-radius:7px;background:#f2f6ff;border:1px solid #dfe7fa;display:flex;align-items:center;justify-content:center;color:#345ec8;font-size:14px;font-weight:800}.r38-risk-icon svg{width:17px;height:17px}.r38-risk-name{font-size:clamp(10.5px,.78vw,13px);font-weight:760;color:#3d4550;display:flex;align-items:center;gap:5px;white-space:nowrap;min-width:0}.r38-risk-numrow{display:flex;align-items:center;justify-content:space-between;margin-top:15px}.r38-risk-score{font-size:clamp(23px,1.7vw,28px);font-weight:850;white-space:nowrap}.r38-mini-state{font-size:clamp(8.5px,.66vw,11px);font-weight:800;border-radius:999px;padding:4px 7px;background:#fff1f1;color:#d63e46;white-space:nowrap}.r38-mini-state.mid{background:#fff7df;color:#c98300}.r38-mini-state.low{background:#edf8f3;color:#24855e}.r38-segments{display:flex;gap:3px;margin-top:13px}.r38-seg{height:4px;flex:1;border-radius:99px;background:#e8ebef}.r38-seg.on-red{background:#ea3944}.r38-seg.on-orange{background:#f0a018}.r38-seg.on-green{background:#3da77a}.r38-risk-foot,.r38-note{font-size:clamp(9.5px,.7vw,11.5px);color:#8c949f;margin-top:10px}.r38-risk-foot{white-space:nowrap}
+.r38-market-table{border:1px solid #e1e6ed;border-radius:9px;overflow:hidden;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#fff}.r38-market-col{min-width:0;border-right:1px solid #e7ebf0}.r38-market-col:last-child{border-right:0}.r38-col-head{height:42px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;background:#fafbfc;border-bottom:1px solid #e7ebf0}.r38-metric{min-height:90px;padding:11px 12px 9px;border-bottom:1px solid #edf0f3}.r38-metric:last-child{border-bottom:0}.r38-metric-name{font-size:11.5px;color:#555e69;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.r38-metric-row{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin-top:4px}.r38-metric-value{font-size:18px;font-weight:820;white-space:nowrap}.r38-metric-delta{font-size:11px;margin-top:3px;font-weight:700;white-space:nowrap}.r38-spark{width:74px;height:30px;flex:0 0 74px}.r38-spark svg{width:100%;height:30px}.r38-recession{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.r38-recession-card{background:#f8fafc;border:1px solid #e7ebf0;border-radius:8px;padding:10px 11px}.r38-recession-name{font-size:11.5px;color:#808895}.r38-recession-value{font-size:19px;font-weight:820;margin-top:3px}
+div[data-testid="stButton"] button{border:1px solid #dfe4eb!important;background:#fff!important;color:#3e4651!important;border-radius:7px!important;font-size:12px!important;font-weight:700!important;min-height:36px!important;box-shadow:none!important}[data-testid="stExpander"]{border:1px solid #dde3eb!important;border-radius:10px!important;background:#fff!important}.r38-footer{font-size:10.5px;color:#9299a3;text-align:right;margin-top:12px}
+@media(max-width:1180px) and (min-width:781px){.r38-hero-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.r38-hero-card:first-child{grid-column:1/-1}.r38-hero-card{min-height:300px}.r38-hero-main{grid-template-columns:minmax(0,1fr) minmax(150px,36%)}.r38-big{white-space:nowrap}.r38-unit{white-space:nowrap}.r38-signal-main{white-space:nowrap}}
+@media(max-width:1050px){.block-container{padding-left:176px!important;padding-right:18px!important}.r38-risk-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.r38-market-table{grid-template-columns:repeat(3,minmax(0,1fr))}.r38-market-col:nth-child(3){border-right:0}.r38-market-col:nth-child(n+4){border-top:1px solid #e7ebf0}}
+
+@media (orientation:portrait) and (min-width:781px){
+  .r38-hero-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px}
+  .r38-hero-card:first-child{grid-column:auto!important}
+  .r38-hero-card{min-height:300px;padding:16px 13px 14px}
+  .r38-card-title{font-size:clamp(13px,1.25vw,16px);white-space:nowrap}
+  .r38-horizon{font-size:clamp(10px,1vw,12px);white-space:nowrap}
+  .r38-hero-main{grid-template-columns:minmax(0,1fr) minmax(95px,34%);gap:10px;min-height:120px}
+  .r38-big{font-size:clamp(34px,3.6vw,43px)}
+  .r38-unit{font-size:clamp(11px,1.15vw,13px)}
+  .r38-signal-main{font-size:clamp(31px,3.7vw,38px)}
+  .r38-badge{font-size:clamp(9.5px,1vw,11.5px);padding:5px 8px}
+  .r38-side-copy{font-size:clamp(10px,1.05vw,12.5px);line-height:1.42;max-width:150px}
+  .r38-side-copy strong{font-size:clamp(10.5px,1.1vw,13px)}
+  .r38-callout{min-height:68px;padding:10px 11px;font-size:clamp(10px,1vw,12px)}
+  .r38-chip{font-size:clamp(9px,.95vw,11px);padding:4px 7px}
+  .r38-risk-grid{grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:7px}
+  .r38-risk-card{padding:12px 8px 11px;min-height:148px;min-width:0}
+  .r38-risk-top{gap:5px}
+  .r38-risk-icon{width:25px;height:25px;flex:0 0 25px;font-size:12px}
+  .r38-risk-name{font-size:clamp(9px,1.15vw,11.5px)}
+  .r38-mini-state{font-size:clamp(7.8px,.9vw,9.8px);padding:3px 5px}
+  .r38-risk-score{font-size:clamp(20px,2.45vw,25px)}
+  .r38-risk-foot{font-size:clamp(8px,.9vw,10px)}
+  .r38-segments{gap:2px}
+}
+@media(max-width:780px){.r38-sidebar{display:none}.block-container{padding:calc(env(safe-area-inset-top,0px) + 44px) 12px 40px!important}.r38-mobilebar{display:flex;align-items:center;justify-content:space-between;background:#101b2d;color:#fff;margin:-18px -12px 15px;padding:0 14px;min-height:46px;position:relative;z-index:90}.r38-mobile-brand{font-size:13px;font-weight:800}.r38-mobile-nav{margin-left:auto;position:relative}.r38-mobile-nav summary{list-style:none;cursor:pointer;font-size:21px;line-height:46px;padding:0 2px;user-select:none;-webkit-tap-highlight-color:transparent}.r38-mobile-nav summary::-webkit-details-marker{display:none}.r38-mobile-drawer{position:absolute;right:-8px;top:43px;width:min(280px,82vw);background:#101b2d;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px;box-shadow:0 16px 36px rgba(0,0,0,.28)}.r38-mobile-link{display:flex;align-items:center;min-height:42px;padding:0 12px;border-radius:8px;color:#dbe3ef!important;text-decoration:none!important;font-size:13px;font-weight:700}.r38-mobile-link.active{background:#3f61d0;color:#fff!important}.r38-mobile-link.disabled{opacity:.45;pointer-events:none}.r38-mobile-divider{height:1px;background:rgba(255,255,255,.08);margin:6px 4px}.r38-title{font-size:23px}.r38-subtitle{font-size:11.5px}.r38-head-actions{display:none}.r38-panel{padding:12px 11px}.r38-section-title{font-size:15px}.r38-hero-grid{grid-template-columns:1fr}.r38-hero-card{min-height:255px}.r38-hero-main{grid-template-columns:1fr;gap:10px;min-height:auto}.r38-hero-side{justify-content:flex-start;text-align:left}.r38-side-copy{max-width:none}.r38-callout{margin-top:14px;height:auto;min-height:auto}.r38-card-title{font-size:14px}.r38-big{font-size:37px;white-space:nowrap}.r38-signal-main{font-size:31px;white-space:nowrap}.r38-risk-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.r38-market-table{grid-template-columns:repeat(2,minmax(0,1fr))}.r38-market-col,.r38-market-col:nth-child(3){border-right:1px solid #e7ebf0}.r38-market-col:nth-child(even){border-right:0}.r38-market-col:nth-child(n+3){border-top:1px solid #e7ebf0}.r38-recession{gap:5px}.r38-metric{min-height:80px;padding:9px}.r38-spark{width:58px;flex-basis:58px}.r38-info-tip{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.98);width:min(340px,86vw);font-size:13px;padding:14px 15px;border-radius:14px;box-shadow:0 18px 55px rgba(0,0,0,.20)}.r38-info:hover .r38-info-tip,.r38-info:focus .r38-info-tip{transform:translate(-50%,-50%) scale(1)}.r38-footer{text-align:left}}
+</style>""", unsafe_allow_html=True)
+
+now_kst=datetime.now(ZoneInfo('Asia/Seoul'))
+_theme_q='dark' if _theme=='dark' else 'light'
+_dashboard_active=' active' if _view=='dashboard' else ''
+_risk_active=' active' if _view=='risk' else ''
+_heatmap_active=' active' if _view=='heatmap' else ''
+_news_active=' active' if _view=='news' else ''
+_market_active=' active' if _view=='market' else ''
+_theme_next='light' if _theme=='dark' else 'dark'
+sidebar='''<aside class="r38-sidebar"><div class="r38-brand"><span class="r38-brand-mark"><svg viewBox="0 0 32 38" fill="none"><path d="M16 2.5 27 7v8.4c0 8.1-4.4 14.4-11 18.1C9.4 29.8 5 23.5 5 15.4V7L16 2.5Z" stroke="#E7EDF7" stroke-width="1.5"/><path d="m11 18 3 3 7-8" stroke="#E7EDF7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Market Risk<br>Monitor</span></div><nav class="r38-nav"><a class="r38-nav-item'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">⌂</span>대시보드</a><a class="r38-nav-item'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▦</span>S&P500 시장 맵</a><a class="r38-nav-item'''+_risk_active+'''" href="?view=risk&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">◉</span>위험지수</a><a class="r38-nav-item'''+_market_active+'''" href="?view=market&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">≋</span>시장 상태</a><div class="r38-nav-item"><span class="r38-nav-icon">▣</span>데이터</div><a class="r38-nav-item'''+_news_active+'''" href="?view=news&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▧</span>뉴스</a><div class="r38-nav-item"><span class="r38-nav-icon">▤</span>리포트</div><div class="r38-nav-item"><span class="r38-nav-icon">⚙</span>설정</div><div class="r38-nav-item"><span class="r38-nav-icon">?</span>도움말</div></nav><div class="r38-side-bottom"><div class="r38-side-title">최종 업데이트</div><div>'''+now_kst.strftime('%Y.%m.%d %H:%M')+'''</div><div>(한국시간 기준)</div><a class="r38-toggle" href="?view='''+_view+'''&theme='''+_theme_next+'''" target="_self">다크 모드 <span class="r38-toggle-pill'''+(' on' if _theme=='dark' else '')+'''"></span></a></div></aside><div class="r38-mobilebar"><div class="r38-mobile-brand">Market Risk Monitor</div><details class="r38-mobile-nav"><summary aria-label="메뉴 열기">☰</summary><div class="r38-mobile-drawer"><a class="r38-mobile-link'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''" target="_self">대시보드</a><a class="r38-mobile-link'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''" target="_self">S&amp;P500 시장 맵</a><a class="r38-mobile-link'''+_risk_active+'''" href="?view=risk&theme='''+_theme_q+'''" target="_self">위험지수</a><a class="r38-mobile-link'''+_market_active+'''" href="?view=market&theme='''+_theme_q+'''" target="_self">시장 상태</a><span class="r38-mobile-link disabled">데이터 · 준비 중</span><a class="r38-mobile-link'''+_news_active+'''" href="?view=news&theme='''+_theme_q+'''" target="_self">뉴스</a><div class="r38-mobile-divider"></div><a class="r38-mobile-link" href="?view='''+_view+'''&theme='''+_theme_next+'''" target="_self">다크 모드 전환</a></div></details></div>'''
+st.markdown(sidebar,unsafe_allow_html=True)
+st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.48.0</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
+
+# News and heatmap are independent routes: no FRED bootstrap or risk engine.
+if _view in ('news','heatmap'):
+    st.markdown('### '+('경제 뉴스' if _view=='news' else 'S&P500 시장맵'))
+    manual=str(_qp.get('refresh','0'))=='1'
+    if manual:st.query_params.pop('refresh',None)
+    if _view=='news':
+        cache_path=NEWS_CACHE
+        reader=_read_news_cache
+        fresh=_news_cache_fresh
+        def loader():
+            value=_fetch_news_snapshot(force=True)
+            if value.get('stale') or not value.get('items'):raise ValueError('뉴스 갱신 실패')
+        st.caption('정보 제공용 뉴스 · 제목 기준 카테고리/태그 · 점수 및 시장 판정에 반영하지 않습니다.')
+        category=st.selectbox('뉴스 카테고리',['전체']+CATEGORIES,key='news_category348')
+    else:
+        cache_path=HEATMAP_CACHE
+        reader=_read_heatmap_cache
+        fresh=_heatmap_cache_fresh
+        def loader():
+            value=_fetch_slickcharts_top200(force=True)
+            if value.get('stale') or not value.get('items'):raise ValueError('시장맵 갱신 실패')
+    if st.button('새로고침',key='light_refresh348'):manual=True
+    if manual or not fresh():start_job(cache_path,loader,cooldown=0 if manual else 30)
+    polling=job_status(cache_path).get('running',False)
+    @st.fragment(run_every='2s' if polling else None)
+    def light_content():
+        snap=reader();items=snap.get('items',[]);state=job_status(cache_path)
+        if items:
+            if _view=='news':
+                chosen=select_news(items,category)
+                if chosen:st.markdown(_news_html(chosen),unsafe_allow_html=True)
+                else:st.info('해당 카테고리에 저장된 기사가 없습니다.')
+            else:st.markdown(_heatmap_html(snap,dark=_theme=='dark'),unsafe_allow_html=True)
+            updated=snap.get('updated',0)
+            label=datetime.fromtimestamp(updated,tz=ZoneInfo('Asia/Seoul')).strftime('%m.%d %H:%M KST')
+            st.caption('마지막 수집 '+label+(' · 갱신 확인 중' if state.get('running') else ''))
+        elif state.get('running'):st.info('데이터를 처음 준비하고 있어요. 완료되면 자동으로 표시됩니다.')
+        else:st.warning('데이터를 가져오지 못했습니다. 새로고침으로 다시 시도해 주세요.')
+        if state.get('error'):st.caption('새 데이터 수집에 실패했습니다. 저장된 자료가 있으면 유지합니다.')
+        if polling and not state.get('running'):st.rerun()
+    light_content()
+    st.stop()
+
 # Handle one-shot manual refresh after refresh helpers are defined.
 _manual_refresh = str(_qp.get("refresh", "0")) == "1"
 if _manual_refresh:
     st.session_state.refresh_started = True
     st.session_state.refresh_applied = False
     st.session_state.refresh_baseline = _status_mtime()
-    threading.Thread(target=_refresh_all_background, kwargs={'force':True}, daemon=True).start()
+    start_job(ROOT_CACHE / 'core_refresh',lambda:_refresh_all_background(force=True),cooldown=5)
+    st.session_state.refresh_applied=not job_status(ROOT_CACHE / 'core_refresh').get('running',False)
     # Remove refresh=1 so browser reloads don't retrigger endlessly.
     st.query_params.clear()
     if _view != "dashboard":
@@ -1544,27 +1640,42 @@ if _manual_refresh:
     if _theme != "light":
         st.query_params["theme"] = _theme
 
-data=_get_session_data(); initial_errors=[]
+bootstrap_key=ROOT_CACHE / 'core_refresh'
+if job_status(bootstrap_key).get("running"):
+    # See individual CSVs before the complete background batch finishes.
+    data=_read_all_cache();_set_session_data(data)
+else:data=_get_session_data()
 if not _cache_ready(data):
-    loading=st.empty(); loading.markdown("""
-    <div class='loading-shell'><div class='loading-title'></div><div class='loading-score'></div>
-    <div class='loading-row'><span></span><span></span><span></span></div><div class='loading-text'>최초 데이터 준비 중…</div></div>""",unsafe_allow_html=True)
-    _,initial_errors=_initial_fetch(); data=_read_all_cache(); _set_session_data(data); loading.empty()
-if not _cache_ready(data):
-    st.error("시장 데이터를 충분히 가져오지 못했습니다.")
-    if initial_errors:
-        with st.expander("오류 상세"):
-            for e in initial_errors: st.write(e)
+    def bootstrap():
+        _,errors=_initial_fetch()
+        _write_refresh_status(not errors,errors)
+    state=job_status(bootstrap_key)
+    if not state or st.button('데이터 다시 받기',key='bootstrap_retry348'):
+        start_job(bootstrap_key,bootstrap,cooldown=5)
+    running=job_status(bootstrap_key).get('running',False)
+    st.markdown('### 미국 증시 위험 모니터')
+    st.markdown('[뉴스 먼저 보기](?view=news) · [시장맵 먼저 보기](?view=heatmap)')
+    @st.fragment(run_every='2s' if running else None)
+    def bootstrap_progress():
+        current=_read_all_cache()
+        ready=sum(bool(len(x)) for x in current.values())
+        st.info(f'처음 실행할 데이터를 준비하고 있어요. {ready}/{len(SERIES)}개 준비')
+        if _cache_ready(current):
+            _set_session_data(current);st.rerun()
+        if running and not job_status(bootstrap_key).get('running'):st.rerun()
+    bootstrap_progress()
+    if not running:st.warning('필수 지표가 부족합니다. 데이터 다시 받기를 눌러 주세요.')
     st.stop()
 
 if "refresh_started" not in st.session_state:
     st.session_state.refresh_started=True
     st.session_state.refresh_baseline=_status_mtime()
-    if _auto_refresh_due():
+    if _auto_refresh_due() and not job_status(bootstrap_key).get("running"):
         st.session_state.refresh_applied=False
-        threading.Thread(target=_refresh_all_background,kwargs={"force":False},daemon=True).start()
+        start_job(ROOT_CACHE / 'core_refresh',lambda:_refresh_all_background(force=False),cooldown=30)
+        st.session_state.refresh_applied=not job_status(ROOT_CACHE / 'core_refresh').get('running',False)
     else:
-        st.session_state.refresh_applied=True
+        st.session_state.refresh_applied=not job_status(bootstrap_key).get("running",False)
 
 def _render_refresh_done():
     try:
@@ -1583,6 +1694,10 @@ if st.session_state.get("refresh_started") and not st.session_state.get("refresh
             st.session_state.refresh_applied=True
             _invalidate_session_market_cache()
             st.rerun()
+        if not job_status(ROOT_CACHE / 'core_refresh').get('running',False):
+            st.session_state.refresh_applied=True
+            st.caption('갱신 작업이 종료됐습니다. 일부 자료는 기존 값을 유지할 수 있습니다.')
+            return
         st.markdown("<div class='data-status'><span></span>최신 데이터 확인 중…</div>",unsafe_allow_html=True)
 else:
     def refresh_indicator():
@@ -1927,52 +2042,6 @@ def delta_value(a,b):
     return d,"— 0.0","flat"
 
 
-# v3.43.1 adaptive dashboard refinement — Streamlit engine + custom HTML/CSS skin.
-st.markdown("""<style>
-html,body,.stApp{background:#f5f7fb!important;color:#171b23}
-header[data-testid="stHeader"]{background:transparent!important}
-.block-container{max-width:none!important;padding:26px 28px 54px 188px!important}
-[data-testid="stSidebar"]{display:none!important}[data-testid="stToolbar"]{right:10px!important}#MainMenu{visibility:hidden}
-[data-testid="stSidebar"]{width:286px!important;min-width:286px!important}
-[data-testid="stSidebar"]>div:first-child{width:286px!important}
-.r38-sidebar{position:fixed;z-index:50;left:0;top:0;bottom:0;width:158px;background:linear-gradient(180deg,#101b2d,#0d1726);color:#fff;padding:22px 13px 18px;box-sizing:border-box}.r38-brand{display:flex;align-items:center;gap:9px;padding:0 9px 20px;font-size:14px;font-weight:800;line-height:1.25}.r38-brand-mark{width:27px;height:32px}.r38-brand-mark svg{width:27px;height:32px}.r38-nav{display:flex;flex-direction:column;gap:6px}.r38-nav-item{display:flex;align-items:center;gap:11px;height:42px;border-radius:7px;padding:0 11px;color:#aeb9c9;font-size:13.5px;font-weight:650;text-decoration:none!important}.r38-nav-item.active{background:linear-gradient(90deg,#365dce,#506be6);color:#fff;box-shadow:0 5px 16px rgba(45,78,190,.28)}.r38-nav-icon{width:17px;text-align:center;font-size:15px}.r38-side-bottom{position:absolute;left:20px;right:20px;bottom:20px;border-top:1px solid rgba(255,255,255,.08);padding-top:16px;color:#9eabba;font-size:11px;line-height:1.55}.r38-side-title{color:#dbe3ef;font-weight:700}.r38-toggle{display:flex;align-items:center;justify-content:space-between;margin-top:16px;color:#9eabba!important;text-decoration:none!important}.r38-toggle-pill{width:34px;height:18px;border-radius:999px;background:#566274;position:relative}.r38-toggle-pill:after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:#d9dee6;left:2px;top:2px;transition:.15s}.r38-toggle-pill.on{background:#4469d8}.r38-toggle-pill.on:after{left:18px;background:#fff}
-.r38-mobilebar{display:none}.r38-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}.r38-title{font-size:30px;font-weight:850;letter-spacing:-.045em;line-height:1.18}.r38-subtitle{font-size:15px;color:#69717d;margin-top:6px}.r38-credit{font-size:12px;color:#939aa5;margin-top:3px}.r38-head-actions{display:flex;gap:10px}.r38-action{cursor:pointer;height:44px;border:1px solid #dfe4eb;border-radius:8px;background:#fff;padding:0 15px;display:flex;align-items:center;font-size:14px;font-weight:650;color:#3c4654;text-decoration:none!important}
-.r38-panel{background:#fff;border:1px solid #dde3eb;border-radius:12px;padding:19px;margin-bottom:15px;box-shadow:0 1px 2px rgba(25,38,58,.025)}.r38-section-title{display:flex;align-items:center;gap:7px;font-size:18px;font-weight:820;color:#202631;margin-bottom:15px}
-.r38-info{position:relative;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border:1px solid #9da5af;border-radius:50%;font-size:9px;color:#7d8590;font-weight:800;cursor:help;outline:none;flex:0 0 15px}.r38-info:hover,.r38-info:focus{background:#eef2f7;color:#37404b;border-color:#66717e}.r38-info-tip{visibility:hidden;opacity:0;pointer-events:none;position:absolute;z-index:9999;left:50%;top:23px;transform:translateX(-50%) translateY(-3px);width:min(330px,78vw);padding:12px 13px;border:1px solid #dfe4ea;border-radius:11px;background:#fff;box-shadow:0 12px 32px rgba(13,24,40,.15);font-size:12.5px;font-weight:550;line-height:1.55;color:#414955;text-align:left;white-space:normal;transition:opacity .12s ease,transform .12s ease}.r38-info:hover .r38-info-tip,.r38-info:focus .r38-info-tip{visibility:visible;opacity:1;transform:translateX(-50%) translateY(0)}
-.r38-hero-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;align-items:stretch}.r38-hero-card{position:relative;min-height:306px;height:100%;border:1px solid #e3e7ed;border-radius:11px;padding:19px 19px 17px;box-sizing:border-box;background:#fff;overflow:visible;display:flex;flex-direction:column}.r38-hero-card.danger{border-color:#f0dddd}.r38-hero-card.warn{border-color:#f0e4cf}.r38-card-title{font-size:16.5px;font-weight:800;color:#3a4049;display:flex;align-items:center;gap:6px}.r38-horizon{font-size:12.5px;color:#8b929d;margin-top:4px}.r38-hero-main{display:grid;grid-template-columns:minmax(0,1fr) minmax(145px,38%);align-items:center;gap:18px;margin-top:18px;min-height:126px;flex:1}.r38-hero-left{min-width:0}.r38-hero-side{min-width:0;display:flex;align-items:center;justify-content:flex-start;text-align:left}.r38-big{font-size:45px;font-weight:850;line-height:1;white-space:nowrap;letter-spacing:-.05em}.r38-big.red{color:#d92f3b}.r38-big.orange{color:#d77b00}.r38-unit{font-size:14px;font-weight:650;white-space:nowrap;color:#555d68;margin-left:4px}.r38-badge{display:inline-flex;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800;margin-top:9px}.r38-badge.red{color:#fff;background:#e83d49}.r38-badge.orange{color:#fff;background:#f09a18}.r38-badge.green{color:#fff;background:#2ca675}.r38-badge.gray{color:#5e6672;background:#eef1f5}.r38-delta-label{font-size:12px;color:#737b87}.r38-delta{font-size:14px;margin-top:4px;font-weight:800}.r38-up{color:#e03b45}.r38-down{color:#2f70c9}.r38-flat{color:#7b8490}.r38-side-copy{font-size:13.5px;line-height:1.5;color:#616a76;font-weight:700;max-width:185px}.r38-side-copy strong{display:block;font-size:14.5px;color:#343b45;margin-bottom:4px}.r38-signal-main{font-size:38px;font-weight:850;white-space:nowrap;line-height:1.05;letter-spacing:-.035em;color:#252b34}.r38-signal-meta{font-size:13px;color:#707985;margin-top:8px;font-weight:700}.r38-callout{position:static;margin-top:12px;height:72px;min-height:72px;box-sizing:border-box;border-radius:8px;padding:12px 13px;font-size:12.5px;line-height:1.5;background:#fff6f6;border:1px solid #f5dede;color:#5c3b3e;display:flex;flex-direction:column;justify-content:center}.r38-callout.warn{background:#fff9ef;border-color:#f3e4c9;color:#69523a}.r38-summary-lines{display:flex;flex-direction:column;gap:3px}.r38-summary-lines b{font-weight:820}.r38-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}.r38-chip{display:inline-flex;align-items:center;min-height:25px;box-sizing:border-box;padding:4px 8px;border-radius:999px;background:#fff0f0;border:1px solid #f3d3d3;color:#c33b42;font-size:11.5px;font-weight:750;line-height:1.2;white-space:nowrap}.r38-chip.warn{background:#fff5e7;border-color:#f0ddbd;color:#a76600}.r38-interpret{margin-top:12px;padding:14px 16px;border-radius:9px;background:#eef7ff;border:1px solid #d6e9f9;font-size:13.5px;line-height:1.6;color:#294862;font-weight:620}.r38-interpret-label{font-weight:850;color:#1f6598;margin-right:9px;white-space:nowrap}
-.r38-risk-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px}.r38-risk-card{border:1px solid #e2e7ed;border-radius:9px;padding:15px 12px 13px;min-height:158px}.r38-risk-top{display:flex;align-items:center;gap:8px}.r38-risk-icon{width:28px;height:28px;border-radius:7px;background:#f2f6ff;border:1px solid #dfe7fa;display:flex;align-items:center;justify-content:center;color:#345ec8;font-size:14px;font-weight:800}.r38-risk-icon svg{width:17px;height:17px}.r38-risk-name{font-size:clamp(10.5px,.78vw,13px);font-weight:760;color:#3d4550;display:flex;align-items:center;gap:5px;white-space:nowrap;min-width:0}.r38-risk-numrow{display:flex;align-items:center;justify-content:space-between;margin-top:15px}.r38-risk-score{font-size:clamp(23px,1.7vw,28px);font-weight:850;white-space:nowrap}.r38-mini-state{font-size:clamp(8.5px,.66vw,11px);font-weight:800;border-radius:999px;padding:4px 7px;background:#fff1f1;color:#d63e46;white-space:nowrap}.r38-mini-state.mid{background:#fff7df;color:#c98300}.r38-mini-state.low{background:#edf8f3;color:#24855e}.r38-segments{display:flex;gap:3px;margin-top:13px}.r38-seg{height:4px;flex:1;border-radius:99px;background:#e8ebef}.r38-seg.on-red{background:#ea3944}.r38-seg.on-orange{background:#f0a018}.r38-seg.on-green{background:#3da77a}.r38-risk-foot,.r38-note{font-size:clamp(9.5px,.7vw,11.5px);color:#8c949f;margin-top:10px}.r38-risk-foot{white-space:nowrap}
-.r38-market-table{border:1px solid #e1e6ed;border-radius:9px;overflow:hidden;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#fff}.r38-market-col{min-width:0;border-right:1px solid #e7ebf0}.r38-market-col:last-child{border-right:0}.r38-col-head{height:42px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;background:#fafbfc;border-bottom:1px solid #e7ebf0}.r38-metric{min-height:90px;padding:11px 12px 9px;border-bottom:1px solid #edf0f3}.r38-metric:last-child{border-bottom:0}.r38-metric-name{font-size:11.5px;color:#555e69;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.r38-metric-row{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin-top:4px}.r38-metric-value{font-size:18px;font-weight:820;white-space:nowrap}.r38-metric-delta{font-size:11px;margin-top:3px;font-weight:700;white-space:nowrap}.r38-spark{width:74px;height:30px;flex:0 0 74px}.r38-spark svg{width:100%;height:30px}.r38-recession{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.r38-recession-card{background:#f8fafc;border:1px solid #e7ebf0;border-radius:8px;padding:10px 11px}.r38-recession-name{font-size:11.5px;color:#808895}.r38-recession-value{font-size:19px;font-weight:820;margin-top:3px}
-div[data-testid="stButton"] button{border:1px solid #dfe4eb!important;background:#fff!important;color:#3e4651!important;border-radius:7px!important;font-size:12px!important;font-weight:700!important;min-height:36px!important;box-shadow:none!important}[data-testid="stExpander"]{border:1px solid #dde3eb!important;border-radius:10px!important;background:#fff!important}.r38-footer{font-size:10.5px;color:#9299a3;text-align:right;margin-top:12px}
-@media(max-width:1180px) and (min-width:781px){.r38-hero-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.r38-hero-card:first-child{grid-column:1/-1}.r38-hero-card{min-height:300px}.r38-hero-main{grid-template-columns:minmax(0,1fr) minmax(150px,36%)}.r38-big{white-space:nowrap}.r38-unit{white-space:nowrap}.r38-signal-main{white-space:nowrap}}
-@media(max-width:1050px){.block-container{padding-left:176px!important;padding-right:18px!important}.r38-risk-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.r38-market-table{grid-template-columns:repeat(3,minmax(0,1fr))}.r38-market-col:nth-child(3){border-right:0}.r38-market-col:nth-child(n+4){border-top:1px solid #e7ebf0}}
-
-@media (orientation:portrait) and (min-width:781px){
-  .r38-hero-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px}
-  .r38-hero-card:first-child{grid-column:auto!important}
-  .r38-hero-card{min-height:300px;padding:16px 13px 14px}
-  .r38-card-title{font-size:clamp(13px,1.25vw,16px);white-space:nowrap}
-  .r38-horizon{font-size:clamp(10px,1vw,12px);white-space:nowrap}
-  .r38-hero-main{grid-template-columns:minmax(0,1fr) minmax(95px,34%);gap:10px;min-height:120px}
-  .r38-big{font-size:clamp(34px,3.6vw,43px)}
-  .r38-unit{font-size:clamp(11px,1.15vw,13px)}
-  .r38-signal-main{font-size:clamp(31px,3.7vw,38px)}
-  .r38-badge{font-size:clamp(9.5px,1vw,11.5px);padding:5px 8px}
-  .r38-side-copy{font-size:clamp(10px,1.05vw,12.5px);line-height:1.42;max-width:150px}
-  .r38-side-copy strong{font-size:clamp(10.5px,1.1vw,13px)}
-  .r38-callout{min-height:68px;padding:10px 11px;font-size:clamp(10px,1vw,12px)}
-  .r38-chip{font-size:clamp(9px,.95vw,11px);padding:4px 7px}
-  .r38-risk-grid{grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:7px}
-  .r38-risk-card{padding:12px 8px 11px;min-height:148px;min-width:0}
-  .r38-risk-top{gap:5px}
-  .r38-risk-icon{width:25px;height:25px;flex:0 0 25px;font-size:12px}
-  .r38-risk-name{font-size:clamp(9px,1.15vw,11.5px)}
-  .r38-mini-state{font-size:clamp(7.8px,.9vw,9.8px);padding:3px 5px}
-  .r38-risk-score{font-size:clamp(20px,2.45vw,25px)}
-  .r38-risk-foot{font-size:clamp(8px,.9vw,10px)}
-  .r38-segments{gap:2px}
-}
-@media(max-width:780px){.r38-sidebar{display:none}.block-container{padding:calc(env(safe-area-inset-top,0px) + 44px) 12px 40px!important}.r38-mobilebar{display:flex;align-items:center;justify-content:space-between;background:#101b2d;color:#fff;margin:-18px -12px 15px;padding:0 14px;min-height:46px;position:relative;z-index:90}.r38-mobile-brand{font-size:13px;font-weight:800}.r38-mobile-nav{margin-left:auto;position:relative}.r38-mobile-nav summary{list-style:none;cursor:pointer;font-size:21px;line-height:46px;padding:0 2px;user-select:none;-webkit-tap-highlight-color:transparent}.r38-mobile-nav summary::-webkit-details-marker{display:none}.r38-mobile-drawer{position:absolute;right:-8px;top:43px;width:min(280px,82vw);background:#101b2d;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px;box-shadow:0 16px 36px rgba(0,0,0,.28)}.r38-mobile-link{display:flex;align-items:center;min-height:42px;padding:0 12px;border-radius:8px;color:#dbe3ef!important;text-decoration:none!important;font-size:13px;font-weight:700}.r38-mobile-link.active{background:#3f61d0;color:#fff!important}.r38-mobile-link.disabled{opacity:.45;pointer-events:none}.r38-mobile-divider{height:1px;background:rgba(255,255,255,.08);margin:6px 4px}.r38-title{font-size:23px}.r38-subtitle{font-size:11.5px}.r38-head-actions{display:none}.r38-panel{padding:12px 11px}.r38-section-title{font-size:15px}.r38-hero-grid{grid-template-columns:1fr}.r38-hero-card{min-height:255px}.r38-hero-main{grid-template-columns:1fr;gap:10px;min-height:auto}.r38-hero-side{justify-content:flex-start;text-align:left}.r38-side-copy{max-width:none}.r38-callout{margin-top:14px;height:auto;min-height:auto}.r38-card-title{font-size:14px}.r38-big{font-size:37px;white-space:nowrap}.r38-signal-main{font-size:31px;white-space:nowrap}.r38-risk-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.r38-market-table{grid-template-columns:repeat(2,minmax(0,1fr))}.r38-market-col,.r38-market-col:nth-child(3){border-right:1px solid #e7ebf0}.r38-market-col:nth-child(even){border-right:0}.r38-market-col:nth-child(n+3){border-top:1px solid #e7ebf0}.r38-recession{gap:5px}.r38-metric{min-height:80px;padding:9px}.r38-spark{width:58px;flex-basis:58px}.r38-info-tip{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.98);width:min(340px,86vw);font-size:13px;padding:14px 15px;border-radius:14px;box-shadow:0 18px 55px rgba(0,0,0,.20)}.r38-info:hover .r38-info-tip,.r38-info:focus .r38-info-tip{transform:translate(-50%,-50%) scale(1)}.r38-footer{text-align:left}}
-</style>""", unsafe_allow_html=True)
 # ---------- v3.43.1 redesigned frontend ----------
 import math
 
@@ -2054,33 +2123,23 @@ fed,y3m,y2,y10,y30=data['기준금리'],data.get('3개월물',pd.Series(dtype=fl
 term_premium=data.get('10년물기간프리미엄',pd.Series(dtype=float)); hy,bbb=data['하이일드스프레드'],data['BBB스프레드']
 cpi,core_cpi,core_pce=data['CPI'],data['근원CPI'],data['근원PCE']; unemp,icsa,sp,vix=data['실업률'],data['신규실업수당'],data['S&P500'],data['VIX']
 cape=_get_session_cape(); spread210=(y10-y2).dropna(); spread103m=(y10-y3m).dropna() if len(y3m) else pd.Series(dtype=float); spread10fed=(y10-fed).dropna()
-snapshot=compute_snapshot(data,cape); scores=snapshot['scores']; details=snapshot['details']; structure=snapshot['structure']
-base_overall=snapshot['overall']; dev=details['market'].get('dev',np.nan); sahm_now=details['economy'].get('sahm_value',np.nan)
-zsp=sp.dropna(); prev_date=zsp.index[-2] if len(zsp)>=2 else None
-if prev_date is not None:
-    prev_data={k:v.loc[:prev_date].dropna() for k,v in data.items()}; prev_cape=cape.loc[:prev_date].dropna() if len(cape) else cape
-    prev_snapshot=compute_snapshot(prev_data,prev_cape,with_alerts=False); prev_fast=fast_signal_scores(prev_snapshot['details'])
-else:
-    prev_data={}; prev_snapshot=None; prev_fast={}
-current_fast=fast_signal_scores(details); rapid=rapid_alert(current_fast,prev_fast)
-overall,floor_diag=apply_risk_floors(base_overall,structure,rapid,sp,vix,current_fast.get('신용',np.nan))
-if prev_snapshot is not None:
-    prev_structure=structural_signals(prev_snapshot['details'],(prev_data['10년물']-prev_data['2년물']).dropna()); prev_rapid=rapid_alert(prev_fast,{})
-    prev_overall,_=apply_risk_floors(prev_snapshot['overall'],prev_structure,prev_rapid,prev_data['S&P500'],prev_data['VIX'],prev_fast.get('신용',np.nan))
-else: prev_overall=np.nan
-_,delta_text,delta_class=delta_value(overall,prev_overall)
+if _view in ('dashboard','risk'):
+    snapshot=compute_snapshot(data,cape); scores=snapshot['scores']; details=snapshot['details']; structure=snapshot['structure']
+    base_overall=snapshot['overall']; dev=details['market'].get('dev',np.nan); sahm_now=details['economy'].get('sahm_value',np.nan)
+    zsp=sp.dropna(); prev_date=zsp.index[-2] if len(zsp)>=2 else None
+    if prev_date is not None:
+        prev_data={k:v.loc[:prev_date].dropna() for k,v in data.items()}; prev_cape=cape.loc[:prev_date].dropna() if len(cape) else cape
+        prev_snapshot=compute_snapshot(prev_data,prev_cape,with_alerts=False); prev_fast=fast_signal_scores(prev_snapshot['details'])
+    else:
+        prev_data={}; prev_snapshot=None; prev_fast={}
+    current_fast=fast_signal_scores(details); rapid=rapid_alert(current_fast,prev_fast)
+    overall,floor_diag=apply_risk_floors(base_overall,structure,rapid,sp,vix,current_fast.get('신용',np.nan))
+    if prev_snapshot is not None:
+        prev_structure=structural_signals(prev_snapshot['details'],(prev_data['10년물']-prev_data['2년물']).dropna()); prev_rapid=rapid_alert(prev_fast,{})
+        prev_overall,_=apply_risk_floors(prev_snapshot['overall'],prev_structure,prev_rapid,prev_data['S&P500'],prev_data['VIX'],prev_fast.get('신용',np.nan))
+    else: prev_overall=np.nan
+    _,delta_text,delta_class=delta_value(overall,prev_overall)
 
-now_kst=datetime.now(ZoneInfo('Asia/Seoul'))
-_theme_q='dark' if _theme=='dark' else 'light'
-_dashboard_active=' active' if _view=='dashboard' else ''
-_risk_active=' active' if _view=='risk' else ''
-_heatmap_active=' active' if _view=='heatmap' else ''
-_news_active=' active' if _view=='news' else ''
-_market_active=' active' if _view=='market' else ''
-_theme_next='light' if _theme=='dark' else 'dark'
-sidebar='''<aside class="r38-sidebar"><div class="r38-brand"><span class="r38-brand-mark"><svg viewBox="0 0 32 38" fill="none"><path d="M16 2.5 27 7v8.4c0 8.1-4.4 14.4-11 18.1C9.4 29.8 5 23.5 5 15.4V7L16 2.5Z" stroke="#E7EDF7" stroke-width="1.5"/><path d="m11 18 3 3 7-8" stroke="#E7EDF7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Market Risk<br>Monitor</span></div><nav class="r38-nav"><a class="r38-nav-item'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">⌂</span>대시보드</a><a class="r38-nav-item'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▦</span>S&P500 시장 맵</a><a class="r38-nav-item'''+_risk_active+'''" href="?view=risk&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">◉</span>위험지수</a><a class="r38-nav-item'''+_market_active+'''" href="?view=market&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">≋</span>시장 상태</a><div class="r38-nav-item"><span class="r38-nav-icon">▣</span>데이터</div><a class="r38-nav-item'''+_news_active+'''" href="?view=news&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▧</span>뉴스</a><div class="r38-nav-item"><span class="r38-nav-icon">▤</span>리포트</div><div class="r38-nav-item"><span class="r38-nav-icon">⚙</span>설정</div><div class="r38-nav-item"><span class="r38-nav-icon">?</span>도움말</div></nav><div class="r38-side-bottom"><div class="r38-side-title">최종 업데이트</div><div>'''+now_kst.strftime('%Y.%m.%d %H:%M')+'''</div><div>(한국시간 기준)</div><a class="r38-toggle" href="?view='''+_view+'''&theme='''+_theme_next+'''" target="_self">다크 모드 <span class="r38-toggle-pill'''+(' on' if _theme=='dark' else '')+'''"></span></a></div></aside><div class="r38-mobilebar"><div class="r38-mobile-brand">Market Risk Monitor</div><details class="r38-mobile-nav"><summary aria-label="메뉴 열기">☰</summary><div class="r38-mobile-drawer"><a class="r38-mobile-link'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''" target="_self">대시보드</a><a class="r38-mobile-link'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''" target="_self">S&amp;P500 시장 맵</a><a class="r38-mobile-link'''+_risk_active+'''" href="?view=risk&theme='''+_theme_q+'''" target="_self">위험지수</a><a class="r38-mobile-link'''+_market_active+'''" href="?view=market&theme='''+_theme_q+'''" target="_self">시장 상태</a><span class="r38-mobile-link disabled">데이터 · 준비 중</span><a class="r38-mobile-link'''+_news_active+'''" href="?view=news&theme='''+_theme_q+'''" target="_self">뉴스</a><div class="r38-mobile-divider"></div><a class="r38-mobile-link" href="?view='''+_view+'''&theme='''+_theme_next+'''" target="_self">다크 모드 전환</a></div></details></div>'''
-st.markdown(sidebar,unsafe_allow_html=True)
-st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.47.0</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
 
 refresh_indicator()
 
@@ -2106,48 +2165,6 @@ if _view=="market":
         'CPI':cpi,'CORECPI':core_cpi,'COREPCE':core_pce,'CAPE':cape,
     })
     render_market_v347(st,market_data)
-    st.stop()
-
-
-if _view=="heatmap":
-    st.markdown(
-        '<section class="r38-panel"><div class="r38-section-title">S&amp;P500 시장 맵</div>'
-        '<div class="r38-note">상위 200종목을 추적합니다. 타일 면적은 SPY 보유비중을 바탕으로 현재 S&amp;P500 비중에 가깝게 표시하고, '
-        '색상은 직전 거래일 대비 등락률입니다. 상승은 빨강 · 하락은 파랑입니다.</div></section>',
-        unsafe_allow_html=True
-    )
-
-    _hm=_fetch_slickcharts_top200(force=False)
-    _hm_items=_hm.get("items",[])[:HEATMAP_TARGET_COUNT]
-    if _hm_items:
-        st.markdown(_heatmap_html(_hm,dark=(_theme=="dark")),unsafe_allow_html=True)
-        _hm_time=datetime.fromtimestamp(_hm.get("updated",time.time()),tz=ZoneInfo("Asia/Seoul")).strftime("%H:%M KST")
-        _stale_note=" · 캐시 지연" if _hm.get("stale") else ""
-        st.caption(
-            f"대표 종목 {len(_hm_items)}/{HEATMAP_TARGET_COUNT}개 표시 · 데이터 캐시 10분 · 마지막 갱신 {_hm_time}{_stale_note} "
-            "· 비중은 SPY 보유비중 기반으로 공식 지수 비중과 소폭 차이날 수 있음"
-        )
-    else:
-        st.warning("시장 맵 데이터를 불러오지 못했습니다. 이전 캐시도 없습니다. 잠시 후 다시 시도해 주세요.")
-    st.stop()
-
-
-if _view=="news":
-    st.markdown(
-        '<section class="r38-panel"><div class="r38-section-title">경제 뉴스</div>'
-        '<div class="r38-note">미국 증시·연준·금리·물가·고용 관련 한국어 뉴스 제목을 모아 보여줍니다. '
-        '기사 본문은 저장하거나 복제하지 않으며, 제목을 누르면 원문 제공 사이트로 이동합니다.</div></section>',
-        unsafe_allow_html=True
-    )
-    _news=_fetch_news_snapshot(force=False); _news_items=_news.get("items",[])
-    if _news_items:
-        _news_time=datetime.fromtimestamp(_news.get("updated",time.time()),tz=ZoneInfo("Asia/Seoul")).strftime("%H:%M KST")
-        _stale_news=" · 캐시 지연" if _news.get("stale") else ""
-        st.markdown(f'<div class="news-toolbar"><div class="news-toolbar-note">최근 뉴스 {len(_news_items)}건 · 10분 캐시 · 마지막 갱신 {_news_time}{_stale_news}</div><div class="news-toolbar-note">출처: Google News RSS</div></div>',unsafe_allow_html=True)
-        st.markdown(_news_html(_news_items),unsafe_allow_html=True)
-        st.caption("※ 제목·출처·발행시각·링크만 표시합니다. 링크는 Google News 경유 후 해당 언론사 기사로 연결될 수 있습니다.")
-    else:
-        st.warning("뉴스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")
     st.stop()
 
 
@@ -2341,4 +2358,4 @@ with st.expander('세부 데이터 및 계산 기준'):
     st.write('경기: 실업률 30% + Sahm Rule 35% + 신규 실업수당 35%.')
     st.write('물가: CPI 25% + 근원 CPI 35% + 근원 PCE 40%.')
     st.write('데이터 공급자는 내부 표준 키와 분리되어 향후 실시간 API로 교체하기 쉽도록 유지합니다.')
-st.markdown(f'<div class="r38-footer">Risk Monitor 3.47.0 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
+st.markdown(f'<div class="r38-footer">Risk Monitor 3.48.0 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
