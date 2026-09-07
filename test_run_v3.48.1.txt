@@ -1,0 +1,10 @@
+v3.48.1 verification summary
+
+- Python syntax check: PASS
+- Automated tests: 35 PASS
+- News card filter markup and counts: PASS
+- URL category selection with cached news: PASS
+- Existing dashboard/risk/market/heatmap routes: PASS
+- Risk score and market status formulas: unchanged
+
+Executed: 2026-09-07 UTC

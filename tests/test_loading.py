@@ -66,8 +66,11 @@ class LoadingTests(unittest.TestCase):
             atomic_json(root/'korean_econ_news.json',{'updated':time.time(),'items':[{'title':'연준 금리 동결','category':'연준·금리','source':'Test','published':time.time(),'link':'https://example.com/news'}]})
             with patch('requests.get',side_effect=AssertionError('unexpected network')) as request:
                 app=AppTest.from_file(str(APP));app.query_params['view']='news';app.run(timeout=15)
-                self.assertEqual(len(app.exception),0,[x.message for x in app.exception]);self.assertEqual(len(app.selectbox),1)
-                app.selectbox[0].select('물가').run();self.assertEqual(len(app.exception),0);request.assert_not_called()
+                self.assertEqual(len(app.exception),0,[x.message for x in app.exception]);self.assertEqual(len(app.selectbox),0)
+                rendered='\n'.join(x.value for x in app.markdown)
+                self.assertIn('news-filter-grid',rendered);self.assertIn('기사 1개',rendered)
+                app.query_params['news_category']='물가';app.run(timeout=15)
+                self.assertEqual(len(app.exception),0);request.assert_not_called()
     def test_parser_invalid_and_duplicates(self):
         node=next(x for x in ast.parse(APP.read_text()).body if isinstance(x,ast.FunctionDef) and x.name=='_parse_fred')
         ns={'pd':pd,'csv':csv};exec(compile(ast.Module(body=[node],type_ignores=[]),'parser','exec'),ns)
