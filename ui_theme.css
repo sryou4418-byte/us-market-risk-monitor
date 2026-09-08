@@ -122,3 +122,31 @@ button:focus-visible,a:focus-visible,summary:focus-visible {outline:3px solid #7
 .ms-hero h2,.ms-hero p,.risk-explain-card,.risk-reason,.risk-section-title,
 .risk-component-score {color:var(--ui-text)!important}
 .ms-hero p {font-size:16px!important;line-height:1.6!important}
+
+/* v4 home: independent axes, driven by engine states rather than duplicate scores. */
+.home-overview {color:var(--ui-text);margin:8px 0 16px}
+.home-intro {padding:8px 0 24px}
+.home-eyebrow {font-size:12px;font-weight:700;letter-spacing:.14em;color:var(--ui-muted);margin:0 0 10px}
+.home-intro h2 {font-size:clamp(26px,3vw,36px);line-height:1.3;padding:0;margin:0 0 12px;color:var(--ui-text)}
+.home-summary {font-size:16px;line-height:1.65;margin:0;overflow-wrap:anywhere}
+.home-axes {display:grid;grid-template-columns:1fr;gap:16px}
+.home-axis {min-width:0;padding:24px;border:1px solid var(--ui-border);border-radius:24px;background:var(--ui-surface);box-shadow:0 4px 18px #10213b06}
+.home-axis h3 {font-size:18px;line-height:1.5;margin:0;padding:0;color:var(--ui-text)}
+.home-role,.home-foot {font-size:14px;line-height:1.6;color:var(--ui-muted);overflow-wrap:anywhere}
+.home-role {margin:8px 0 24px}.home-foot {margin:16px 0 0}
+.home-value {font-size:clamp(48px,6vw,68px);line-height:1.15;font-weight:750;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.home-value span {font-size:16px;letter-spacing:0;font-weight:400;color:var(--ui-muted)}
+.home-signal {font-size:clamp(28px,3vw,38px);line-height:1.4;font-weight:700;margin-bottom:8px;overflow-wrap:anywhere}
+.home-state {display:inline-block;border-radius:8px;padding:5px 10px;margin-top:12px;font-size:14px;font-weight:600}
+.home-state.calm {background:#e3f5eb;color:#08734a}.home-state.watch {background:#fff1d3;color:#805400}
+.home-state.alert {background:#ffebef;color:#ac243e}.home-state.unknown {background:var(--ui-soft);color:var(--ui-muted)}
+.st-key-home_details {margin-bottom:24px}
+@container content (min-width:620px) {
+  .home-axes {grid-template-columns:repeat(2,minmax(0,1fr))}
+  .home-score {grid-column:1/-1}
+}
+@container content (min-width:1000px) {
+  .home-axes {grid-template-columns:1.15fr 1fr 1fr}
+  .home-score {grid-column:auto}
+}
+@media(max-width:640px) {.home-axis {padding:20px}.home-role {margin-bottom:16px}}

@@ -2278,38 +2278,14 @@ if _view=="risk":
         f'<div class="risk-component-note" style="margin-top:10px">현재 위험지수 {_risk_final:.0f}은(는) {_esc(_level)} 구간입니다.</div></section>',unsafe_allow_html=True)
     st.stop()
 
-_structure_count=int(structure.get('count',0) or 0); _structure_raw=structure.get('level','정상')
-_rapid_count=int(rapid.get('count',0) or 0); _rapid_raw=rapid.get('level','정상')
-struct_score=50 if _structure_count>=2 else (40 if _structure_count==1 else 0); rapid_score=65 if _rapid_count>=3 else (55 if _rapid_count==2 else 0)
-struct_tone='#e53b46' if _structure_count>=3 else ('#ef9d17' if _structure_count else '#2fa374'); rapid_tone='#e53b46' if _rapid_count>=2 else ('#ef9d17' if _rapid_count else '#2fa374')
-struct_label={'정상':'정상','관찰':'관찰','주의':'주의','경계':'경고'}.get(_structure_raw,_structure_raw); rapid_label={'정상':'정상','관찰':'관찰','급변 경보':'경고','강한 스트레스':'경고'}.get(_rapid_raw,_rapid_raw)
-struct_chips=''.join(f'<span class="r38-chip warn">{_esc(x[0])}</span>' for x in structure.get('items',[])) or '<span class="r38-chip warn">활성 신호 없음</span>'
-rapid_chips=''.join(f'<span class="r38-chip">{_esc(x)}</span>' for x in rapid.get('active',[])) or '<span class="r38-chip">급변 없음</span>'
-_struct_names=[x[0] for x in structure.get('items',[]) if x]
-try:
-    _market_v02=market_status_sentence_v02(sp,vix,y10,hy,bbb)
-    market_summary=_market_v02['sentence']
-except Exception:
-    if rapid.get('level') in ('급변 경보','강한 스트레스'):
-        market_summary='단기 시장 스트레스가 빠르게 높아지고 있어 변동성 확대에 주의가 필요합니다.'
-    elif _structure_count>=2:
-        market_summary='시장 급변은 제한적이지만 여러 구조적 부담이 겹쳐 중기 위험을 주의해서 볼 구간입니다.'
-    elif _structure_count==1:
-        _reason=_struct_names[0] if _struct_names else '구조적 위험 요인'
-        market_summary=f'시장 전반은 비교적 안정적이지만, {_reason}로 구조적 부담은 남아 있습니다.'
-    elif overall>=61:
-        market_summary='여러 위험 요인이 높아져 시장 취약성이 높은 상태입니다.'
-    elif overall>=41:
-        market_summary='시장 위험은 보통 수준이며 일부 지표의 변화는 계속 확인할 필요가 있습니다.'
-    else:
-        market_summary='시장 전반은 안정적이며 뚜렷한 급변 신호는 없습니다.'
-hero_tone='#e53b46' if overall>=61 else ('#ef9d17' if overall>=41 else '#2fa374')
-level1=f'''<section class="r38-panel"><div class="r38-section-title">한눈에 보는 시장 위험 {_info38("종합 위험지수는 중기적인 시장 취약성을 0~100으로 요약합니다. 구조적 위험은 수개월~1년 지속될 수 있는 취약성을, 시장 급변 신호는 수일~수주 단위의 빠른 스트레스를 별도로 보여줍니다.")}</div><div class="r38-hero-grid">
-<div class="r38-hero-card danger"><div class="r38-card-title">위험지수 {_info38("시장·밸류에이션, 변동성, 금리, 신용, 경기, 물가를 가중 합산한 기본 위험도에 구조·급변·진행 중 시장 스트레스 하한을 적용한 최종 위험지수입니다.")}</div><div class="r38-horizon">중기 · 누적 시장 취약성</div><div class="r38-hero-main"><div class="r38-hero-left"><div><span class="r38-big {'red' if overall>=61 else ('orange' if overall>=41 else '')}">{overall:.1f}</span><span class="r38-unit">/ 100</span></div>{_risk_badge(overall)}</div><div class="r38-hero-side"><div class="r38-side-copy"><strong>전일 대비</strong><div class="r38-delta r38-{delta_class}">{_esc(delta_text)}</div></div></div></div><div class="r38-callout"><div class="r38-summary-lines"><div>현재 위험도 <b>{_esc(label(overall))}</b></div><div class="r38-chips"><span class="r38-chip warn">구조적 신호 {_structure_count}개</span><span class="r38-chip">급변 신호 {_rapid_count}개</span></div></div></div></div>
-<div class="r38-hero-card warn"><div class="r38-card-title">구조적 위험 {_info38("장단기금리 역전 기억, 높은 CAPE, 물가 재가속, 고용 악화처럼 수개월 이상 지속될 수 있는 구조적 취약성을 감지합니다.")}</div><div class="r38-horizon">수개월~1년 · 지속 취약성</div><div class="r38-hero-main"><div class="r38-hero-left"><div class="r38-signal-main">{_esc(struct_label)}</div><span class="r38-badge {'orange' if _structure_count else 'green'}">신호 {_structure_count}개</span></div><div class="r38-hero-side"><div class="r38-side-copy"><strong>{'활성 신호 확인' if _structure_count else '구조 신호 없음'}</strong>{'현재 구조적 취약성이 감지되었습니다.' if _structure_count else '현재 뚜렷한 구조적 취약성은 없습니다.'}</div></div></div><div class="r38-callout warn"><b>감지된 신호 ({_structure_count}개)</b><div class="r38-chips">{struct_chips}</div></div></div>
-<div class="r38-hero-card danger"><div class="r38-card-title">시장 급변 신호 {_info38("VIX, 신용 스프레드, 10년물 금리 상승, 신규 실업수당 추세 등 서로 다른 빠른 지표가 동시에 악화되는지를 봅니다. 1개 축은 관찰만 하며, 2개 이상 동시 확인되면 단기 시장 스트레스가 강화된 것으로 해석합니다.")}</div><div class="r38-horizon">수일~수주 · 단기 시장 스트레스</div><div class="r38-hero-main"><div class="r38-hero-left"><div class="r38-signal-main">{_esc(rapid_label)}</div><span class="r38-badge {'red' if _rapid_count>=2 else ('orange' if _rapid_count else 'green')}">급변 {_rapid_count}개</span></div><div class="r38-hero-side"><div class="r38-side-copy"><strong>{'단기 스트레스 확인' if _rapid_count>=2 else ('단일 축 관찰' if _rapid_count else '급변 없음')}</strong>{'여러 시장 축의 급격한 악화가 동시에 확인됩니다.' if _rapid_count>=2 else ('일부 급변 축을 관찰 중입니다.' if _rapid_count else '현재 뚜렷한 단기 급변 신호는 없습니다.')}</div></div></div><div class="r38-callout"><b>감지된 신호 ({_rapid_count}개)</b><div class="r38-chips">{rapid_chips}</div></div></div>
-</div><div class="r38-interpret"><span class="r38-interpret-label">현재 시장 해석</span>{_esc(market_summary)}</div></section>'''
-st.markdown(level1,unsafe_allow_html=True)
+from dashboard_view import render as render_dashboard
+from ui_shell import navigate
+render_dashboard(
+    st, score=overall, risk_label=label(overall), delta=delta_text,
+    structure=structure, rapid=rapid,
+    observed=sp.dropna().index[-1].strftime('%Y-%m-%d') if len(sp.dropna()) else '확인 불가',
+    navigate=navigate,
+)
 
 
 def _risk_icon_svg(kind):
@@ -2337,7 +2313,7 @@ for k in ['시장·밸류에이션','변동성','금리','신용','경기','물�
     sc=scores.get(k,np.nan); state_class='low' if pd.notna(sc) and sc<41 else ('mid' if pd.notna(sc) and sc<61 else '')
     score_txt=f'{sc:.1f}' if pd.notna(sc) else 'N/A'
     risk_cards.append(f'''<div class="r38-risk-card"><div class="r38-risk-top"><div class="r38-risk-icon">{_risk_icon_svg(k)}</div><div class="r38-risk-name">{label_map[k]} {_info38(risk_info_map[k])}</div></div><div class="r38-risk-numrow"><div class="r38-risk-score">{score_txt}</div><span class="r38-mini-state {state_class}">{_esc(label(sc))}</span></div>{_seg_html(sc)}<div class="r38-risk-foot">0~100 · 높을수록 위험</div></div>''')
-st.markdown(f'''<section class="r38-panel"><div class="r38-section-title">6대 위험 카테고리 현황 {_info38("종합 위험지수를 구성하는 여섯 영역의 현재 점수입니다. 각 점수는 0~100이며 높을수록 해당 영역의 위험이 큽니다.")}</div><div class="r38-risk-grid">{''.join(risk_cards)}</div><div class="r38-note">* 각 카테고리는 0~100 점수로 평가되며, 높을수록 위험이 큽니다.</div></section>''',unsafe_allow_html=True)
+st.markdown(f'''<section class="r38-panel"><div class="r38-section-title">위험지수 구성요소 {_info38("종합 위험지수를 구성하는 여섯 영역의 현재 점수입니다. 각 점수는 0~100이며 높을수록 해당 영역의 위험이 큽니다.")}</div><div class="r38-risk-grid">{''.join(risk_cards)}</div><div class="r38-note">* 각 카테고리는 0~100 점수로 평가되며, 높을수록 위험이 큽니다.</div></section>''',unsafe_allow_html=True)
 
 fx=_get_session_fx_items()
 spv,spd,spc=_fmt_series_metric(sp,'',2); effv,effd,effc=_fmt_series_metric(fed,'%',2); y2v,y2d,y2c=_fmt_series_metric(y2,'%',2); y10v,y10d,y10c=_fmt_series_metric(y10,'%',2); y30v,y30d,y30c=_fmt_series_metric(y30,'%',2)
@@ -2391,5 +2367,5 @@ with st.expander('세부 데이터 및 계산 기준'):
     st.write('경기: 실업률 30% + Sahm Rule 35% + 신규 실업수당 35%.')
     st.write('물가: CPI 25% + 근원 CPI 35% + 근원 PCE 40%.')
     st.write('데이터 공급자는 내부 표준 키와 분리되어 향후 실시간 API로 교체하기 쉽도록 유지합니다.')
-st.markdown(f'<div class="r38-footer">Risk Monitor 3.50.0 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
+st.markdown(f'<div class="r38-footer">Risk Monitor 4.0.0-dev · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
 

@@ -2,7 +2,7 @@
 from pathlib import Path
 import streamlit as st
 
-VERSION = '3.50.0'
+VERSION = '4.0.0-dev'
 PAGES = {'dashboard': '대시보드', 'heatmap': 'S&P500 시장 맵',
          'risk': '위험지수', 'market': '시장 상태', 'news': '뉴스'}
 

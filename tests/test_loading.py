@@ -111,6 +111,13 @@ class LoadingTests(unittest.TestCase):
                         if index:app.button(key='nav_'+view).click()
                         app.run(timeout=20)
                         self.assertEqual(len(app.exception),0,[x.message for x in app.exception])
+                        if view == 'dashboard':
+                            rendered='\n'.join(x.value for x in app.markdown)
+                            self.assertIn('시장 급변신호', rendered)
+                            app.button(key='home_risk_details').click().run(timeout=20)
+                            self.assertEqual(app.query_params['view'], ['risk'])
+                            self.assertEqual(len(app.exception),0,[x.message for x in app.exception])
+                            app.button(key='nav_dashboard').click().run(timeout=20)
                         if index:self.assertEqual(app.session_state['_route_marker'],'preserved')
                         app.session_state['_route_marker']='preserved'
                 request.assert_not_called()
