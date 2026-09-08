@@ -1,7 +1,7 @@
 {
   ".gitignore": "be032f86219e72cff285888ef1858d2ae24107873c292bcecb39efa7695a2cff",
   "검증결과_v3.49.0.md": "a48eed00ad28be2487519842da9171c0c78d27cce8d8ec0aed4cfd96141fcbde",
-  "미국_증시_종합위험지수_개발_인수인계_2026-09-08_v3.49.0.md": "6d4b81e547d4070c3143079f5068727046874776d91883aaf4e29349974dddba",
+  "미국_증시_종합위험지수_개발_인수인계_2026-09-08_v3.49.0.md": "31824c2e77b63526251017bbe3d15c6cd651e88f7d01c96734caaa3d5eb78baa",
   "판정기준_v3.47.0.md": "ab8ac60ea7dc20ed99780cdba2288ef4bab09c0ec9a1452b8fb628bf9fcb3ada",
   "audit/audit_metadata.json": "f625db912756d8262e764b03324cfbdb38361fb06d60b4142077adb79caebfed",
   "audit/daily_signals.csv": "de20526a99272e1a1596cc0516e71d9c322ab5f7bcca07aa664cf78f3228cf4b",
@@ -41,4 +41,3 @@
   "tests/test_market.py": "2e09e1b66c2ff62738576f8842698efd79d3d02820042c1de79613d340312a98",
   "tests/test_streamlit.py": "c295eed28522fbccbc00b56507bccb9e0f28ef5aedc1b5ae13bc6252b1a52587"
 }
-
