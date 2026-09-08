@@ -1,0 +1,124 @@
+/* Layout follows available content width, including when the sidebar is open. */
+.stApp, html, body {background:var(--ui-canvas)!important;color:var(--ui-text)!important}
+[data-testid="stMainBlockContainer"], .block-container {
+  max-width:1280px!important;margin-inline:auto;padding:64px 24px 48px!important;
+  container-type:inline-size;container-name:content;
+}
+[data-testid="stSidebar"] {background:#101b2d!important;color:#eaf0f8!important}
+[data-testid="stSidebar"] h3,[data-testid="stSidebar"] p {color:#eaf0f8!important}
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {gap:12px}
+[data-testid="stSidebar"] button {background:#17273d!important;color:#eaf0f8!important;border-color:#34465e!important;text-align:left}
+[data-testid="stSidebar"] button p {font-size:15px!important;white-space:normal}
+[data-testid="stSidebar"] button[kind="primary"] {background:#355dcd!important;border-color:#6c8dea!important}
+[data-testid="stHeader"] {background:var(--ui-canvas)!important}
+[data-testid="stSidebarCollapsedControl"] button,[data-testid="stSidebarCollapseButton"] button {min-width:44px;min-height:44px}
+.stMarkdown p {line-height:1.6}
+.stCaption p {font-size:14px!important;color:var(--ui-muted)!important}
+div[data-testid="stButton"] button {min-height:44px!important;font-size:15px!important;
+  border-radius:12px!important;background:var(--ui-surface)!important;color:var(--ui-text)!important;
+  border-color:var(--ui-border)!important;transition:background-color 120ms ease,border-color 120ms ease}
+div[data-testid="stButton"] button p {font-size:15px!important;line-height:1.45}
+div[data-testid="stButton"] button[kind="primary"] {background:#355dcd!important;color:#fff!important;border-color:#355dcd!important}
+button:focus-visible,a:focus-visible,summary:focus-visible {outline:3px solid #7194f0!important;outline-offset:3px}
+.r38-head {margin-bottom:8px;gap:12px}
+.r38-title {font-size:clamp(24px,2.3vw,32px)!important;line-height:1.3;color:var(--ui-text)}
+.r38-credit,.r38-subtitle {font-size:14px!important;line-height:1.5;color:var(--ui-muted)!important}
+.r38-panel,.r38-hero-card,.r38-risk-card,.r38-market-table,.news-card,.ms-card,
+.ms-hero,.risk-score-card,.risk-explain-card,.risk-flow-card,.risk-reasons-card,
+.risk-band-card,.risk-signal-card,.risk-component-card,[data-testid="stExpander"] {
+  background:var(--ui-surface)!important;color:var(--ui-text)!important;
+  border-color:var(--ui-border)!important;border-radius:16px!important;min-width:0;
+}
+.r38-panel,.r38-hero-card,.r38-risk-card,.news-card,.ms-card {padding:20px!important}
+.r38-section-title,.r38-card-title,.r38-risk-name,.r38-metric-name,.ms-kicker,
+.risk-component-name {font-size:15px!important;line-height:1.5;color:var(--ui-text)!important;
+  white-space:normal!important;overflow-wrap:anywhere}
+.r38-section-title {font-size:20px!important;margin-bottom:16px}
+.r38-horizon,.r38-side-copy,.r38-side-copy strong,.r38-risk-foot,.r38-note,.r38-footer,
+.r38-delta-label,.r38-metric-delta,.r38-recession-name,.r38-signal-meta,.ms-detail,.ms-note,
+.news-meta,.news-go,.news-toolbar-note,.data-status,.tm-help {
+  font-size:14px!important;line-height:1.6!important;color:var(--ui-muted)!important;white-space:normal!important;
+}
+.r38-risk-score,.r38-metric-value,.r38-recession-value,.ms-value {
+  font-size:clamp(24px,2.3vw,30px)!important;line-height:1.25;color:var(--ui-text)!important;
+  font-variant-numeric:tabular-nums;letter-spacing:-.02em!important;white-space:normal!important;
+}
+.r38-big {font-size:clamp(44px,4.5vw,60px)!important;line-height:1.1}
+.r38-signal-main {font-size:clamp(30px,3vw,40px)!important;color:var(--ui-text)!important}
+.r38-unit,.r38-badge,.r38-mini-state,.r38-chip,.ms-state {font-size:13px!important;line-height:1.4}
+.r38-risk-numrow {flex-wrap:wrap;gap:8px}
+.r38-hero-card {min-height:0!important;height:auto!important}
+.r38-hero-main {grid-template-columns:1fr!important;min-height:0!important;gap:12px!important;margin-top:16px}
+.r38-hero-side {justify-content:flex-start!important;text-align:left!important}
+.r38-side-copy {max-width:none!important}
+.r38-callout {height:auto!important;min-height:72px!important;margin-top:16px;font-size:14px!important}
+.r38-risk-card {min-height:164px!important}
+.ms-card {min-height:160px!important}
+.ms-summary,.r38-interpret {background:var(--ui-soft)!important;color:var(--ui-text)!important;
+  font-size:16px!important;line-height:1.65!important;padding:16px 20px}
+.r38-col-head,.r38-recession-card,.hm-summary,.risk-flow-step,.risk-signal-box {
+  background:var(--ui-soft)!important;color:var(--ui-text)!important;border-color:var(--ui-border)!important;
+}
+.r38-col-head {height:auto;min-height:44px;font-size:15px}
+.r38-market-col,.r38-metric {border-color:var(--ui-border)!important}
+.r38-metric {padding:16px;min-height:100px}
+.r38-metric-row {flex-wrap:wrap;gap:8px}
+.r38-info,.info-icon {width:24px!important;height:24px!important;flex:0 0 24px!important;font-size:13px!important}
+.r38-info-tip,.info-tip {font-size:14px!important;line-height:1.6!important}
+.news-title {font-size:17px!important;line-height:1.6!important;color:var(--ui-text)!important}
+.news-meta {flex-wrap:wrap;overflow:visible}
+.news-category {height:auto;min-height:24px;white-space:normal}
+.st-key-news_filters {display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px!important}
+.st-key-news_filters button {min-height:76px!important;white-space:normal!important}
+.r38-hero-grid,.r38-risk-grid,.ms-grid6,.ms-grid3,.news-list,.r38-market-table,.risk-components,
+.risk-detail-hero,.risk-detail-grid {gap:16px!important;grid-template-columns:1fr!important}
+.r38-hero-card:first-child {grid-column:auto!important}
+.r38-risk-grid,.ms-grid6 {grid-template-columns:repeat(2,minmax(0,1fr))!important}
+.r38-market-table {gap:0!important}
+.r38-recession {grid-template-columns:1fr}
+.r38-market-col {border-right:0!important;border-bottom:1px solid var(--ui-border)}
+@container content (min-width:620px) {
+  .ms-grid3,.news-list,.risk-detail-hero,.risk-detail-grid,.risk-components {grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .r38-hero-grid {grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .r38-hero-card:first-child {grid-column:1/-1!important}
+  .r38-risk-grid,.ms-grid6 {grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .r38-market-table {grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .r38-recession {grid-template-columns:repeat(3,minmax(0,1fr))}
+  .st-key-news_filters {grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@container content (min-width:1000px) {
+  .r38-hero-grid,.ms-grid3,.risk-components {grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .r38-hero-card:first-child {grid-column:auto!important}
+  .r38-market-table {grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .st-key-news_filters {grid-template-columns:repeat(5,minmax(0,1fr))}
+}
+@media(max-width:640px) {
+  [data-testid="stMainBlockContainer"],.block-container {
+    padding:60px max(16px,env(safe-area-inset-right)) 32px max(16px,env(safe-area-inset-left))!important;
+  }
+  .r38-panel,.r38-hero-card,.r38-risk-card,.news-card,.ms-card {padding:16px!important}
+  .r38-risk-grid {gap:10px!important}
+  .r38-risk-top {gap:6px;flex-wrap:wrap}
+}
+@media(max-height:500px) and (orientation:landscape) {
+  [data-testid="stMainBlockContainer"],.block-container {padding-top:52px!important}
+  .r38-hero-card,.ms-card {min-height:0!important}
+}
+@media(prefers-reduced-motion:reduce) {
+  *,*::before,*::after {animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+/* Keep semantic change colors and sidebar contrast above shared button styles. */
+[data-testid="stSidebar"] div[data-testid="stButton"] button {
+  background:#17273d!important;color:#eaf0f8!important;border-color:#34465e!important;
+}
+[data-testid="stSidebar"] div[data-testid="stButton"] button[kind="primary"] {
+  background:#355dcd!important;color:#fff!important;border-color:#7194f0!important;
+}
+.r38-metric-delta.r38-down,.r38-delta.r38-down {color:#3577cf!important}
+.r38-metric-delta.r38-up,.r38-delta.r38-up {color:#d63749!important}
+.ms-state.warn {background:#fff1d3!important;color:#805400!important}
+.ms-state.good {background:#e3f5eb!important;color:#08734a!important}
+.ms-state.na {background:var(--ui-soft)!important;color:var(--ui-muted)!important}
+.ms-hero h2,.ms-hero p,.risk-explain-card,.risk-reason,.risk-section-title,
+.risk-component-score {color:var(--ui-text)!important}
+.ms-hero p {font-size:16px!important;line-height:1.6!important}

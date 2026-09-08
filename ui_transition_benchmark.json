@@ -1,0 +1,54 @@
+{
+  "scope": "Local Streamlit AppTest interaction, warm cache, synthetic data, network mocked. Not browser click-to-paint latency, FPS, or a before/after speedup measurement.",
+  "samples_per_action": 10,
+  "results": {
+    "news_to_heatmap": {
+      "median_ms": 118.59,
+      "max_ms": 173.55,
+      "samples_ms": [
+        131.36,
+        118.28,
+        115.15,
+        118.43,
+        118.86,
+        120.75,
+        117.29,
+        117.32,
+        118.76,
+        173.55
+      ]
+    },
+    "heatmap_to_news": {
+      "median_ms": 116.05,
+      "max_ms": 129.39,
+      "samples_ms": [
+        122.17,
+        116.27,
+        115.08,
+        127.08,
+        114.33,
+        117.02,
+        114.35,
+        115.43,
+        115.83,
+        129.39
+      ]
+    },
+    "news_category": {
+      "median_ms": 115.66,
+      "max_ms": 133.51,
+      "samples_ms": [
+        114.9,
+        114.03,
+        115.38,
+        115.93,
+        119.05,
+        113.59,
+        116.33,
+        113.97,
+        130.5,
+        133.51
+      ]
+    }
+  }
+}

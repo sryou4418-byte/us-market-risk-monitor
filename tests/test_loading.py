@@ -68,7 +68,8 @@ class LoadingTests(unittest.TestCase):
                 app=AppTest.from_file(str(APP));app.query_params['view']='news';app.run(timeout=15)
                 self.assertEqual(len(app.exception),0,[x.message for x in app.exception]);self.assertEqual(len(app.selectbox),0)
                 rendered='\n'.join(x.value for x in app.markdown)
-                self.assertIn('news-filter-grid',rendered);self.assertIn('기사 1개',rendered)
+                self.assertTrue(any('기사 1개' in x.label for x in app.button))
+                self.assertEqual(sum(x.key.startswith('news_filter_') for x in app.button),10)
                 self.assertFalse(any(x.label=='새로고침' for x in app.button))
                 app.query_params['news_category']='물가';app.run(timeout=15)
                 self.assertEqual(len(app.exception),0);request.assert_not_called()
@@ -104,10 +105,14 @@ class LoadingTests(unittest.TestCase):
             atomic_json(root/'market_aux_v348.json',auxiliary)
             atomic_json(root/'sp500_market_map_200.json',{'updated':time.time(),'items':[{'symbol':'AAPL','name':'Apple','sector':'Technology','weight':6,'change':1,'price':100}]})
             with patch('requests.get',side_effect=AssertionError('unexpected network')) as request:
-                for view in ('dashboard','risk','market','heatmap'):
+                app=AppTest.from_file(str(APP));app.query_params['view']='dashboard'
+                for index,view in enumerate(('dashboard','risk','market','heatmap','dashboard')):
                     with self.subTest(view=view):
-                        app=AppTest.from_file(str(APP));app.query_params['view']=view;app.run(timeout=20)
+                        if index:app.button(key='nav_'+view).click()
+                        app.run(timeout=20)
                         self.assertEqual(len(app.exception),0,[x.message for x in app.exception])
+                        if index:self.assertEqual(app.session_state['_route_marker'],'preserved')
+                        app.session_state['_route_marker']='preserved'
                 request.assert_not_called()
 
     def test_cold_bootstrap_shows_shell_without_waiting(self):
