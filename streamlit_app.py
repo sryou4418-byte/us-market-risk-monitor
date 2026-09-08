@@ -17,7 +17,7 @@ def _esc(x): return html.escape(str(x))
 
 st.set_page_config(page_title="미국 증시 위험 모니터", page_icon="🇺🇸", layout="wide")
 
-# v3.48.1: card-style news category navigation with visible article counts.
+# v3.49.0: simplified news/market UI and calendar-safe CPI recovery.
 # UI state must be initialized before any theme/navigation rendering.
 _qp = st.query_params
 _view = str(_qp.get("view", "dashboard"))
@@ -1331,6 +1331,14 @@ def _merge_and_write(series,new):
     _write_cache(series,merged); return merged
 
 
+INFLATION_SERIES={"CPIAUCSL","CPILFESL","PCEPILFE"}
+def _recent_month_gaps(s,months=16):
+    if s is None or not len(s):return []
+    z=s.dropna().copy();z.index=pd.to_datetime(z.index).to_period('M')
+    last=z.index.max();expected=pd.period_range(last-months+1,last,freq='M');present=set(z.index)
+    return [str(x) for x in expected if x not in present]
+
+
 def _treasury_latest():
     year=pd.Timestamp.now().year
     url=("https://home.treasury.gov/resource-center/data-chart-center/interest-rates/"
@@ -1384,7 +1392,10 @@ def _refresh_series(name,sid,force=False):
         if len(cached) and not force and _series_fresh(sid):
             return name,cached,None
         new=_fetch(sid,recent=bool(len(cached)))
-        return name,_merge_and_write(sid,new),None
+        merged=_merge_and_write(sid,new)
+        if sid in INFLATION_SERIES and _recent_month_gaps(merged):
+            merged=_merge_and_write(sid,_fetch(sid,recent=False))
+        return name,merged,None
     except Exception as e:
         return name,_read_cache(sid),f"{name}: {e}"
 
@@ -1614,13 +1625,13 @@ _market_active=' active' if _view=='market' else ''
 _theme_next='light' if _theme=='dark' else 'dark'
 sidebar='''<aside class="r38-sidebar"><div class="r38-brand"><span class="r38-brand-mark"><svg viewBox="0 0 32 38" fill="none"><path d="M16 2.5 27 7v8.4c0 8.1-4.4 14.4-11 18.1C9.4 29.8 5 23.5 5 15.4V7L16 2.5Z" stroke="#E7EDF7" stroke-width="1.5"/><path d="m11 18 3 3 7-8" stroke="#E7EDF7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Market Risk<br>Monitor</span></div><nav class="r38-nav"><a class="r38-nav-item'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">⌂</span>대시보드</a><a class="r38-nav-item'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▦</span>S&P500 시장 맵</a><a class="r38-nav-item'''+_risk_active+'''" href="?view=risk&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">◉</span>위험지수</a><a class="r38-nav-item'''+_market_active+'''" href="?view=market&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">≋</span>시장 상태</a><div class="r38-nav-item"><span class="r38-nav-icon">▣</span>데이터</div><a class="r38-nav-item'''+_news_active+'''" href="?view=news&theme='''+_theme_q+'''" target="_self"><span class="r38-nav-icon">▧</span>뉴스</a><div class="r38-nav-item"><span class="r38-nav-icon">▤</span>리포트</div><div class="r38-nav-item"><span class="r38-nav-icon">⚙</span>설정</div><div class="r38-nav-item"><span class="r38-nav-icon">?</span>도움말</div></nav><div class="r38-side-bottom"><div class="r38-side-title">최종 업데이트</div><div>'''+now_kst.strftime('%Y.%m.%d %H:%M')+'''</div><div>(한국시간 기준)</div><a class="r38-toggle" href="?view='''+_view+'''&theme='''+_theme_next+'''" target="_self">다크 모드 <span class="r38-toggle-pill'''+(' on' if _theme=='dark' else '')+'''"></span></a></div></aside><div class="r38-mobilebar"><div class="r38-mobile-brand">Market Risk Monitor</div><details class="r38-mobile-nav"><summary aria-label="메뉴 열기">☰</summary><div class="r38-mobile-drawer"><a class="r38-mobile-link'''+_dashboard_active+'''" href="?view=dashboard&theme='''+_theme_q+'''" target="_self">대시보드</a><a class="r38-mobile-link'''+_heatmap_active+'''" href="?view=heatmap&theme='''+_theme_q+'''" target="_self">S&amp;P500 시장 맵</a><a class="r38-mobile-link'''+_risk_active+'''" href="?view=risk&theme='''+_theme_q+'''" target="_self">위험지수</a><a class="r38-mobile-link'''+_market_active+'''" href="?view=market&theme='''+_theme_q+'''" target="_self">시장 상태</a><span class="r38-mobile-link disabled">데이터 · 준비 중</span><a class="r38-mobile-link'''+_news_active+'''" href="?view=news&theme='''+_theme_q+'''" target="_self">뉴스</a><div class="r38-mobile-divider"></div><a class="r38-mobile-link" href="?view='''+_view+'''&theme='''+_theme_next+'''" target="_self">다크 모드 전환</a></div></details></div>'''
 st.markdown(sidebar,unsafe_allow_html=True)
-st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.48.1</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
+st.markdown(f'''<div class="r38-head"><div><div class="r38-title">미국 증시 위험 모니터</div><div class="r38-subtitle">현재 시장 상황과 주요 위험 신호를 한눈에 확인하세요.</div><div class="r38-credit">Developed by 유유상 · v3.49.0</div></div><div class="r38-head-actions"><div class="r38-action">{now_kst.strftime('%Y.%m.%d')}　▣</div><a class="r38-action" href="?view={_view}&theme={_theme_q}&refresh=1" target="_self">↻　데이터 업데이트</a></div></div>''',unsafe_allow_html=True)
 
 # News and heatmap are independent routes: no FRED bootstrap or risk engine.
 if _view in ('news','heatmap'):
     st.markdown('### '+('경제 뉴스' if _view=='news' else 'S&P500 시장맵'))
-    manual=str(_qp.get('refresh','0'))=='1'
-    if manual:st.query_params.pop('refresh',None)
+    manual=False if _view=='news' else str(_qp.get('refresh','0'))=='1'
+    if str(_qp.get('refresh','0'))=='1':st.query_params.pop('refresh',None)
     if _view=='news':
         cache_path=NEWS_CACHE
         reader=_read_news_cache
@@ -1638,7 +1649,7 @@ if _view in ('news','heatmap'):
         def loader():
             value=_fetch_slickcharts_top200(force=True)
             if value.get('stale') or not value.get('items'):raise ValueError('시장맵 갱신 실패')
-    if st.button('새로고침',key='light_refresh348'):manual=True
+    if _view=='heatmap' and st.button('새로고침',key='light_refresh349'):manual=True
     if manual or not fresh():start_job(cache_path,loader,cooldown=0 if manual else 30)
     polling=job_status(cache_path).get('running',False)
     @st.fragment(run_every='2s' if polling else None)
@@ -1655,7 +1666,7 @@ if _view in ('news','heatmap'):
             label=datetime.fromtimestamp(updated,tz=ZoneInfo('Asia/Seoul')).strftime('%m.%d %H:%M KST')
             st.caption('마지막 수집 '+label+(' · 갱신 확인 중' if state.get('running') else ''))
         elif state.get('running'):st.info('데이터를 처음 준비하고 있어요. 완료되면 자동으로 표시됩니다.')
-        else:st.warning('데이터를 가져오지 못했습니다. 새로고침으로 다시 시도해 주세요.')
+        else:st.warning('데이터를 가져오지 못했습니다. 잠시 후 자동으로 다시 확인합니다.' if _view=='news' else '데이터를 가져오지 못했습니다. 새로고침으로 다시 시도해 주세요.')
         if state.get('error'):st.caption('새 데이터 수집에 실패했습니다. 저장된 자료가 있으면 유지합니다.')
         if polling and not state.get('running'):st.rerun()
     light_content()
@@ -2394,4 +2405,5 @@ with st.expander('세부 데이터 및 계산 기준'):
     st.write('경기: 실업률 30% + Sahm Rule 35% + 신규 실업수당 35%.')
     st.write('물가: CPI 25% + 근원 CPI 35% + 근원 PCE 40%.')
     st.write('데이터 공급자는 내부 표준 키와 분리되어 향후 실시간 API로 교체하기 쉽도록 유지합니다.')
-st.markdown(f'<div class="r38-footer">Risk Monitor 3.48.1 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
+st.markdown(f'<div class="r38-footer">Risk Monitor 3.49.0 · 화면 갱신 {datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S KST")} · 캐시 즉시 표시 · 백그라운드 최신화</div>',unsafe_allow_html=True)
+

@@ -1,0 +1,14 @@
+v3.49.0 verification summary
+
+- Python syntax check: PASS
+- Automated tests: 38 PASS
+- News card filter markup, counts, and separate refresh removal: PASS
+- Market indicator detail expanders removed: PASS
+- CPI calendar-month partial calculation and gap detection: PASS
+- Commodity futures labels: PASS
+- URL category selection with cached news: PASS
+- Existing dashboard/risk/market/heatmap routes: PASS
+- Composite risk formulas and market-state thresholds: unchanged
+
+Executed: 2026-09-08 KST
+

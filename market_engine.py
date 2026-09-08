@@ -36,7 +36,7 @@ for k,t,l,m in [('CPI','CPI','3/3.5/5','3/4/6'),('CORECPI','근원 CPI','3/3.5/4
     register(k,t,'물가','inflation',f'YoY {l}%, 3개월 연율 {m}%; 연율이 YoY+0.5%p 이상이며 관찰기준 초과 시 재가속. YoY<0과 연율<-1 동반 시 하락압력 관찰.','M','% YoY')
 # Minimum economically meaningful moves keep tiny changes from becoming alerts.
 AUX_PROFILES={'GOLD':(1.5,3.0),'SILVER':(3.,6.),'COPPER':(2.,4.),'WTI':(3.,6.),'DXY':(.6,1.2),'USDKRW':(1.,2.),'USDJPY':(1.,2.)}
-for k,t in [('DXY','달러지수'),('USDKRW','달러/원'),('USDJPY','달러/엔'),('WTI','WTI'),('GOLD','금'),('SILVER','은'),('COPPER','구리')]:
+for k,t in [('DXY','달러지수'),('USDKRW','달러/원'),('USDJPY','달러/엔'),('WTI','WTI 원유 선물'),('GOLD','COMEX 금 선물'),('SILVER','COMEX 은 선물'),('COPPER','COMEX 구리 선물')]:
     a,b=AUX_PROFILES[k]
     register(k,t,'FX' if k in ('DXY','USDKRW','USDJPY') else '원자재','aux',f'5/20일 절대변화가 각각 {a}/{b}% 이상일 때만 과거 분포 90/97.5백분위로 관찰/주의. 5·20일 방향, 최근 5회 반복, 지표별 교차조건 병기. 단독 위험 승격 없음.')
 
@@ -70,7 +70,7 @@ def percentile(s,n,kind='pct'):
 
 def base(key,s):
     cfg=REGISTRY[key]; kind=cfg['kind']
-    minlen={'equity':252,'ma':200,'relative':21,'cape':120,'breadth':21,'policy':21,'rate':25,'term':147,'curve':22,'vix':22,'position':127,'credit':22,'unemp':15,'sahm':1,'claims':55,'inflation':16,'aux':147}[kind]
+    minlen={'equity':252,'ma':200,'relative':21,'cape':120,'breadth':21,'policy':21,'rate':25,'term':147,'curve':22,'vix':22,'position':127,'credit':22,'unemp':15,'sahm':1,'claims':55,'inflation':1,'aux':147}[kind]
     if len(s)<minlen:return p._ms_missing_v346(f'이력 부족: {len(s)}/{minlen}관측')
     if kind in ('equity','ma','cape','vix','claims','inflation','aux') and (s.tail(525 if kind=='aux' else 252 if kind in ('equity','ma') else 16 if kind=='inflation' else 55 if kind=='claims' else 240 if kind=='cape' else 22)<=0).any():return p._ms_missing_v346('0 이하 가격/지수: 비율 계산 보류')
     if kind=='equity':r=p._eval_equity_v346(s)
@@ -136,13 +136,16 @@ def evaluate(data,asof=None):
     for key,cfg in REGISTRY.items():
         s=z[key]; max_age={'D':7,'W':21,'M':75}[cfg['frequency']]
         stale=bool(len(s) and (asof-s.index[-1]).days>max_age)
-        if cfg['frequency']=='M' and len(s)>=16 and len(s.tail(16).index.to_period('M').unique()) != (s.index[-1].to_period('M')-s.index[-16].to_period('M')).n+1:
+        if cfg['frequency']=='M' and cfg['kind']!='inflation' and len(s)>=16 and len(s.tail(16).index.to_period('M').unique()) != (s.index[-1].to_period('M')-s.index[-16].to_period('M')).n+1:
             r=p._ms_missing_v346('월간 관측 누락: 달력 기간 계산 보류'); z[key]=s.iloc[:0]
         elif stale:r=p._ms_missing_v346(f'자료 지연: 마지막 관측 {s.index[-1]:%Y-%m-%d}'); z[key]=s.iloc[:0]
+        elif cfg['kind']=='inflation' and not len(s):r=p._ms_missing_v346('FRED 수집 실패 또는 저장 자료 없음')
         else:r=base(key,s)
         r.update(key=key,title=cfg['title'],group=cfg['group'],rule=cfg['rule'],asof=str(asof.date()),last_observation=str(s.index[-1].date()) if len(s) else None)
         r['value']=float(s.iloc[-1]) if len(s) else np.nan
         if cfg['kind']=='inflation':r['value']=r.get('meta',{}).get('yoy',np.nan)
+        if cfg['kind']=='inflation' and len(s) and (asof.to_period('M')-s.index[-1].to_period('M')).n>=2:
+            r['reason']+=' · 최신 발표 대기 또는 수집 지연'
         if key=='CLAIMS':r['value']=r.get('meta',{}).get('avg4',np.nan)
         if key=='MA200':r['value']=r.get('meta',{}).get('dev',np.nan)
         if cfg['kind']=='position':r['value']=r.get('meta',{}).get('pctl',np.nan)
@@ -220,3 +223,4 @@ def evaluate(data,asof=None):
     elif len(stress)==1:sentence=stress[0]+' 영역에 신호가 있으나 다른 핵심 영역으로 확산되는지는 추가 확인이 필요합니다.'
     else:sentence='주식·변동성·신용의 동반 불안 신호는 제한적입니다. 금리·경기·물가의 부담은 별도로 확인하세요.'
     return dict(version=VERSION,results=results,axes=axes,summary=sentence,asof=str(asof.date()))
+

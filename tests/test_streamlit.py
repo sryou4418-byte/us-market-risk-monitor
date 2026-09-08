@@ -9,5 +9,7 @@ st.set_page_config(layout="wide")
 render(st,fixture(),"2026-09-05")
 ''').run(timeout=30)
         self.assertEqual(len(app.exception),0)
-        self.assertEqual(len(app.expander),38)
+        self.assertEqual(len(app.expander),1)
         self.assertEqual(len(app.subheader),8)
+        self.assertNotIn('해석과 판정 기준','\n'.join(x.label for x in app.expander))
+

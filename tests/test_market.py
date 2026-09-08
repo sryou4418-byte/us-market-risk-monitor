@@ -1,4 +1,5 @@
 import ast
+import html
 import json
 import sys
 import unittest
@@ -79,7 +80,23 @@ class TestMarket(unittest.TestCase):
         self.assertGreaterEqual(self.run_engine(d)['results']['EW']['rank'],0)
     def test_monthly_missing_period(self):
         d=fixture();d['COREPCE']=d['COREPCE'].drop(d['COREPCE'].index[-4])
-        self.assertEqual(self.run_engine(d)['results']['COREPCE']['rank'],-1)
+        r=self.run_engine(d)['results']['COREPCE']
+        self.assertGreaterEqual(r['rank'],0)
+        self.assertTrue(np.isnan(r['meta']['ann3']))
+        self.assertTrue(pd.notna(r['meta']['yoy']))
+        self.assertIn('특정 월 누락',r['reason'])
+    def test_inflation_uses_exact_calendar_month(self):
+        d=fixture();s=d['CPI'];d['CPI']=s.drop(s.index[-13])
+        r=self.run_engine(d)['results']['CPI']
+        self.assertGreaterEqual(r['rank'],0)
+        self.assertTrue(np.isnan(r['meta']['yoy']))
+        self.assertTrue(pd.notna(r['meta']['ann3']))
+        self.assertIn('전년비 기준월',r['reason'])
+    def test_inflation_missing_both_is_unavailable(self):
+        d=fixture();s=d['CORECPI'];d['CORECPI']=s.drop([s.index[-4],s.index[-13]])
+        r=self.run_engine(d)['results']['CORECPI']
+        self.assertEqual(r['rank'],-1)
+        self.assertIn('특정 월 누락',r['reason'])
     def test_future_is_ignored(self):
         s=series();a=self.run_engine({'GOLD':s})['results']['GOLD']
         s.loc[pd.Timestamp('2026-09-10')]=1000;b=self.run_engine({'GOLD':s})['results']['GOLD']
@@ -100,6 +117,8 @@ class TestMarket(unittest.TestCase):
             def __exit__(self,*a):return False
         st=Surface();r=render(st,fixture(),ASOF)
         self.assertEqual(len(r['results']),37)
-        for c in e.REGISTRY.values():self.assertIn(c['title'],' '.join(st.text))
+        for c in e.REGISTRY.values():self.assertIn(html.escape(c['title']),' '.join(st.text))
+        self.assertNotIn('해석과 판정 기준',' '.join(st.text))
 
 if __name__=='__main__':unittest.main()
+

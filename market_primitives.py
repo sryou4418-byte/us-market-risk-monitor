@@ -205,22 +205,35 @@ def _eval_sahm_v346(v):
 
 def _eval_inflation_v346(s,kind="CPI"):
     z=s.dropna().astype(float)
-    if len(z)<16:return _ms_missing_v346()
-    yoy=z.pct_change(12)*100.0; ann=((z/z.shift(3))**4-1.0)*100.0
-    y=latest(yoy); a=latest(ann)
-    if pd.isna(y) or pd.isna(a):return _ms_missing_v346()
+    if not len(z):return _ms_missing_v346("FRED 저장 자료 없음")
+    z=z.groupby(z.index.to_period("M")).last()
+    anchor=z.index[-1]
+    def calendar_value(months):
+        target=anchor-months
+        return float(z.loc[target]) if target in z.index else np.nan
+    cur=float(z.iloc[-1]); y0=calendar_value(12); a0=calendar_value(3)
+    y=(cur/y0-1.0)*100.0 if pd.notna(y0) and y0>0 else np.nan
+    a=((cur/a0)**4-1.0)*100.0 if pd.notna(a0) and a0>0 else np.nan
+    missing=[]
+    if pd.isna(y):missing.append(f"전년비 기준월 {anchor-12} 누락")
+    if pd.isna(a):missing.append(f"3개월 연율 기준월 {anchor-3} 누락")
+    if pd.isna(y) and pd.isna(a):
+        reason="특정 월 누락: "+" · ".join(missing) if len(z)>=4 else f"필요 이력 부족: {len(z)}개월"
+        return _ms_missing_v346(reason)
     if kind=="Core PCE":
         l=(2.5,3.0,4.0); m=(2.5,3.0,4.0)
     elif kind=="Core CPI":
         l=(3.0,3.5,4.5); m=(3.0,3.5,4.5)
     else:
         l=(3.0,3.5,5.0); m=(3.0,4.0,6.0)
-    level_rank=3 if y>=l[2] else (2 if y>=l[1] else (1 if y>=l[0] else 0))
-    change_rank=3 if a>=m[2] else (2 if a>=m[1] else (1 if a>=m[0] else 0))
-    if a>=y+0.5 and a>=m[0]:change_rank=max(change_rank,2)
+    level_rank=(3 if y>=l[2] else (2 if y>=l[1] else (1 if y>=l[0] else 0))) if pd.notna(y) else -1
+    change_rank=(3 if a>=m[2] else (2 if a>=m[1] else (1 if a>=m[0] else 0))) if pd.notna(a) else -1
+    if pd.notna(y) and pd.notna(a) and a>=y+0.5 and a>=m[0]:change_rank=max(change_rank,2)
     rank=max(level_rank,change_rank)
-    reason=f"YoY {y:.1f}% · 3개월 연율 {a:.1f}%" + (" · 최근 재가속" if a>=y+0.5 and a>=m[0] else "")
-    return _ms_result_v346(_ms_state_v346(rank),reason,_ms_state_v346(level_rank),_ms_state_v346(change_rank),{"yoy":y,"ann3":a})
+    parts=[f"YoY {y:.1f}%" if pd.notna(y) else "YoY 확인 부족",f"3개월 연율 {a:.1f}%" if pd.notna(a) else "3개월 연율 확인 부족"]
+    if pd.notna(y) and pd.notna(a) and a>=y+0.5 and a>=m[0]:parts.append("최근 재가속")
+    if missing:parts.append("특정 월 누락: "+", ".join(missing))
+    return _ms_result_v346(_ms_state_v346(rank)," · ".join(parts),_ms_state_v346(level_rank) if level_rank>=0 else "확인 부족",_ms_state_v346(change_rank) if change_rank>=0 else "확인 부족",{"yoy":y,"ann3":a,"missing_metrics":missing})
 
 def _eval_move_only_v346(s,n5=5,n20=20,kind="pct",cap="주의"):
     z=s.dropna().astype(float)
@@ -240,3 +253,4 @@ def _eval_move_only_v346(s,n5=5,n20=20,kind="pct",cap="주의"):
 
 def latest(s):
     s=s.dropna(); return float(s.iloc[-1]) if len(s) else np.nan
+

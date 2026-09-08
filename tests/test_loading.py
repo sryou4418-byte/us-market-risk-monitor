@@ -69,21 +69,31 @@ class LoadingTests(unittest.TestCase):
                 self.assertEqual(len(app.exception),0,[x.message for x in app.exception]);self.assertEqual(len(app.selectbox),0)
                 rendered='\n'.join(x.value for x in app.markdown)
                 self.assertIn('news-filter-grid',rendered);self.assertIn('기사 1개',rendered)
+                self.assertFalse(any(x.label=='새로고침' for x in app.button))
                 app.query_params['news_category']='물가';app.run(timeout=15)
                 self.assertEqual(len(app.exception),0);request.assert_not_called()
     def test_parser_invalid_and_duplicates(self):
-        node=next(x for x in ast.parse(APP.read_text()).body if isinstance(x,ast.FunctionDef) and x.name=='_parse_fred')
+        node=next(x for x in ast.parse(APP.read_text(encoding='utf-8')).body if isinstance(x,ast.FunctionDef) and x.name=='_parse_fred')
         ns={'pd':pd,'csv':csv};exec(compile(ast.Module(body=[node],type_ignores=[]),'parser','exec'),ns)
         z=ns['_parse_fred']('\ufeffpreamble\nobservation_date,X\n2026-01-02,2\n2026-01-01,.\n2026-01-02,4\nbad,5\n2026-01-03,3','X')
         self.assertEqual(z.tolist(),[2.,3.])
     def test_news_no_engine_dependency(self):
-        s=(APP.parent/'news_categories.py').read_text();self.assertNotIn('market_engine',s)
+        s=(APP.parent/'news_categories.py').read_text(encoding='utf-8');self.assertNotIn('market_engine',s)
+
+    def test_recent_inflation_gap_detection(self):
+        tree=ast.parse(APP.read_text(encoding='utf-8'))
+        node=next(x for x in tree.body if isinstance(x,ast.FunctionDef) and x.name=='_recent_month_gaps')
+        ns={'pd':pd};exec(compile(ast.Module(body=[node],type_ignores=[]),'gap','exec'),ns)
+        s=pd.Series(range(16),index=pd.date_range('2025-01-01',periods=16,freq='MS'),dtype=float)
+        self.assertEqual(ns['_recent_month_gaps'](s),[])
+        missing=s.drop(pd.Timestamp('2025-11-01'))
+        self.assertEqual(ns['_recent_month_gaps'](missing),['2025-11'])
 
     def test_full_routes_with_cached_data(self):
         from test_market import fixture
         data=fixture()
         mapping={'기준금리':'EFFR','3개월물':'US3M','2년물':'US2Y','10년물':'US10Y','30년물':'US30Y','10년물실질금리':'REAL10','10년물기간프리미엄':'TERM','하이일드스프레드':'HY','BBB스프레드':'BBB','실업률':'UNEMP','신규실업수당':'CLAIMS','CPI':'CPI','근원CPI':'CORECPI','근원PCE':'COREPCE','S&P500':'SP500','VIX':'VIX'}
-        tree=ast.parse(APP.read_text());series=next(ast.literal_eval(n.value) for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='SERIES' for t in n.targets))
+        tree=ast.parse(APP.read_text(encoding='utf-8'));series=next(ast.literal_eval(n.value) for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='SERIES' for t in n.targets))
         with tempfile.TemporaryDirectory() as d,patch.dict(os.environ,{'LOCALAPPDATA':d}):
             root=Path(d)/'RiskMonitor';(root/'data').mkdir(parents=True)
             for name,sid in series.items():data[mapping[name]].rename('value').to_csv(root/'data'/f'{sid}.csv',index_label='date')
@@ -106,3 +116,4 @@ class LoadingTests(unittest.TestCase):
             self.assertEqual(len(app.exception),0)
             self.assertTrue(any('준비' in x.value for x in app.info))
             request.assert_not_called()
+

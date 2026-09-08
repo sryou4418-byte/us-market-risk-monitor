@@ -44,13 +44,5 @@ def render(st,data,asof=None):
             detail=r['reason']+' · '+r['persistence']
             cards.append(f'<div class="ms-card"><div class="ms-kicker">{esc(r["title"])}</div><div class="ms-value">{esc(value)}</div><span class="ms-state {tone}">{esc(r["state"])}</span><div class="ms-detail">{esc(detail)}</div></div>')
         st.markdown('<div class="ms-grid3">'+''.join(cards)+'</div>',unsafe_allow_html=True)
-        for r in items:
-            with st.expander(r['title']+' · 해석과 판정 기준'):
-                st.write(r['interpretation'])
-                st.write('확인 근거: '+(' / '.join(r['evidence']) or '추가 근거 부족'))
-                st.write('반대 증거: '+(' / '.join(r['counterevidence']) or '확인된 반대 증거 없음'))
-                if r['missing']:st.write('자료 한계: '+' / '.join(r['missing']))
-                st.caption('교차 근거 충분도 '+r['confidence']+' · 확률이나 원인 확정을 뜻하지 않습니다.')
-                st.write('기준: '+r['rule'])
-                st.caption('마지막 관측 '+str(r['last_observation'])+' · '+r['persistence'])
     return report
+
