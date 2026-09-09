@@ -3,6 +3,7 @@ import html
 import pandas as pd
 import streamlit as st
 from market_engine import REGISTRY, evaluate, clean, percentile, pct
+from presentation import Metric, number, fmt, tone, text
 
 @st.cache_data(ttl=300,max_entries=8,show_spinner=False)
 def cached_evaluate(data,asof):
@@ -12,7 +13,6 @@ def render(st,data,asof=None):
     cutoff=str(pd.Timestamp(asof if asof is not None else pd.Timestamp.now(tz='UTC')).date())
     report=cached_evaluate(data,cutoff)
     esc=lambda x:html.escape(str(x))
-    st.markdown('<div class="ms-hero"><h2>시장 상태</h2><p>현재 수준 · 변화속도 · 반복 여부 · 함께 움직이는 지표를 확인합니다.</p></div>',unsafe_allow_html=True)
     st.caption('시장 상태 v0.4 · 연구용 기준 · 개별 경보는 시장 전체 위험점수와 다른 개념입니다.')
     st.markdown('<div class="ms-summary">'+esc(report['summary'])+'</div>',unsafe_allow_html=True)
     overview=[]
@@ -39,10 +39,8 @@ def render(st,data,asof=None):
         items=[r for r in report['results'].values() if r['group']==group]
         cards=[]
         for r in items:
-            value='N/A' if pd.isna(r['value']) else f"{r['value']:,.2f} {r['unit']}"
-            tone='na' if r['rank']<0 else 'bad' if r['rank']==3 else 'warn' if r['rank'] else 'good'
+            metric=Metric(r['title'],number(r['value']),r['unit'],r['state'],r['last_observation'],r['reason'])
             detail=r['reason']+' · '+r['persistence']
-            cards.append(f'<div class="ms-card"><div class="ms-kicker">{esc(r["title"])}</div><div class="ms-value">{esc(value)}</div><span class="ms-state {tone}">{esc(r["state"])}</span><div class="ms-detail">{esc(detail)}</div></div>')
-        st.markdown('<div class="ms-grid3">'+''.join(cards)+'</div>',unsafe_allow_html=True)
+            cards.append(f'<article class="market-row"><div><strong>{text(metric.title)}</strong><small>관측 {text(metric.observed or "확인 불가")}</small></div><div class="market-value">{fmt(metric.value,2)} <small>{text(metric.unit)}</small></div><span class="state {tone(metric.state)}">{text(metric.state)}</span><div class="reason">{text(detail)}</div></article>')
+        st.markdown('<div class="indicator-list">'+''.join(cards)+'</div>',unsafe_allow_html=True)
     return report
-

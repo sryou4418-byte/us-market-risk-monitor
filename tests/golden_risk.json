@@ -1,0 +1,452 @@
+{
+  "baseline": "5fcd1427e263f9a2b60da7966c0443bfab55ee65",
+  "cases": {
+    "normal": {
+      "scores": {
+        "시장·밸류에이션": 23.0,
+        "변동성": 13.25,
+        "금리": 38.66666666666667,
+        "신용": 14.075000000000001,
+        "경기": 32.35,
+        "물가": 19.999999999999687
+      },
+      "details": {
+        "market": {
+          "dev": 0.0,
+          "cape": 25.0,
+          "over": 15.0,
+          "valuation": 45.0,
+          "momentum": 2.5,
+          "mom20": 0.0
+        },
+        "volatility": {
+          "level": 20.0,
+          "score": 5.0,
+          "pct": 0.0,
+          "points": 0.0
+        },
+        "rates": {
+          "level": 48.333333333333336,
+          "rise": 10.0,
+          "rise_delta": 0.0,
+          "curve": 60.0,
+          "curve_value": 0.0,
+          "policy": 45.0,
+          "policy_value": 0.0,
+          "tp": 35.0,
+          "tp_value": 0.3
+        },
+        "credit": {
+          "hy_abs": 18.5,
+          "bbb_abs": 20.0,
+          "fast5": 5.0,
+          "trend20": 5.0
+        },
+        "economy": {
+          "unemp": 25.0,
+          "sahm": 5.0,
+          "sahm_raw": 5.0,
+          "sahm_value": 0.0,
+          "claims": 66.0,
+          "claims_confirm": 0.0,
+          "claims_level": 100.0,
+          "claims_trend": 15.0,
+          "claims_trend_pct": 0.0
+        },
+        "inflation": {
+          "headline": {
+            "yoy": 2.0000000000000018,
+            "m3": 1.9999999999999352,
+            "yoy_score": 20.000000000000053,
+            "m3_score": 19.999999999999353
+          },
+          "core_cpi": {
+            "yoy": 2.0000000000000018,
+            "m3": 1.9999999999999352,
+            "yoy_score": 20.000000000000053,
+            "m3_score": 19.999999999999353
+          },
+          "core_pce": {
+            "yoy": 2.0000000000000018,
+            "m3": 1.9999999999999352,
+            "yoy_score": 20.000000000000053,
+            "m3_score": 19.999999999999353
+          },
+          "recent": 19.999999999999353,
+          "yoy": 20.000000000000053
+        }
+      },
+      "overall": 25.952416666666643,
+      "structure": {
+        "level": "정상",
+        "count": 0.0,
+        "items": [],
+        "inversion_memory": 0.0,
+        "last_inversion": null
+      }
+    },
+    "stress": {
+      "scores": {
+        "시장·밸류에이션": 15.749999999999998,
+        "변동성": 96.80000000000001,
+        "금리": 38.66666666666667,
+        "신용": 53.55,
+        "경기": 32.35,
+        "물가": 19.999999999999687
+      },
+      "details": {
+        "market": {
+          "dev": -23.076923076923073,
+          "cape": 25.0,
+          "over": 0.0,
+          "valuation": 45.0,
+          "momentum": 0.0,
+          "mom20": -25.0
+        },
+        "volatility": {
+          "level": 95.0,
+          "score": 99.0,
+          "pct": 233.33333333333334,
+          "points": 35.0
+        },
+        "rates": {
+          "level": 48.333333333333336,
+          "rise": 10.0,
+          "rise_delta": 0.0,
+          "curve": 60.0,
+          "curve_value": 0.0,
+          "policy": 45.0,
+          "policy_value": 0.0,
+          "tp": 35.0,
+          "tp_value": 0.3
+        },
+        "credit": {
+          "hy_abs": 76.66666666666667,
+          "bbb_abs": 20.0,
+          "fast5": 5.0,
+          "trend20": 71.5
+        },
+        "economy": {
+          "unemp": 25.0,
+          "sahm": 5.0,
+          "sahm_raw": 5.0,
+          "sahm_value": 0.0,
+          "claims": 66.0,
+          "claims_confirm": 0.0,
+          "claims_level": 100.0,
+          "claims_trend": 15.0,
+          "claims_trend_pct": 0.0
+        },
+        "inflation": {
+          "headline": {
+            "yoy": 2.0000000000000018,
+            "m3": 1.9999999999999352,
+            "yoy_score": 20.000000000000053,
+            "m3_score": 19.999999999999353
+          },
+          "core_cpi": {
+            "yoy": 2.0000000000000018,
+            "m3": 1.9999999999999352,
+            "yoy_score": 20.000000000000053,
+            "m3_score": 19.999999999999353
+          },
+          "core_pce": {
+            "yoy": 2.0000000000000018,
+            "m3": 1.9999999999999352,
+            "yoy_score": 20.000000000000053,
+            "m3_score": 19.999999999999353
+          },
+          "recent": 19.999999999999353,
+          "yoy": 20.000000000000053
+        }
+      },
+      "overall": 38.41616666666664,
+      "structure": {
+        "level": "정상",
+        "count": 0.0,
+        "items": [],
+        "inversion_memory": 0.0,
+        "last_inversion": null
+      }
+    },
+    "missing_inflation": {
+      "scores": {
+        "시장·밸류에이션": 23.0,
+        "변동성": 13.25,
+        "금리": 38.66666666666667,
+        "신용": 14.075000000000001,
+        "경기": 32.35,
+        "물가": null
+      },
+      "details": {
+        "market": {
+          "dev": 0.0,
+          "cape": 25.0,
+          "over": 15.0,
+          "valuation": 45.0,
+          "momentum": 2.5,
+          "mom20": 0.0
+        },
+        "volatility": {
+          "level": 20.0,
+          "score": 5.0,
+          "pct": 0.0,
+          "points": 0.0
+        },
+        "rates": {
+          "level": 48.333333333333336,
+          "rise": 10.0,
+          "rise_delta": 0.0,
+          "curve": 60.0,
+          "curve_value": 0.0,
+          "policy": 45.0,
+          "policy_value": 0.0,
+          "tp": 35.0,
+          "tp_value": 0.3
+        },
+        "credit": {
+          "hy_abs": 18.5,
+          "bbb_abs": 20.0,
+          "fast5": 5.0,
+          "trend20": 5.0
+        },
+        "economy": {
+          "unemp": 25.0,
+          "sahm": 5.0,
+          "sahm_raw": 5.0,
+          "sahm_value": 0.0,
+          "claims": 66.0,
+          "claims_confirm": 0.0,
+          "claims_level": 100.0,
+          "claims_trend": 15.0,
+          "claims_trend_pct": 0.0
+        },
+        "inflation": {
+          "headline": {
+            "yoy": null,
+            "m3": null,
+            "yoy_score": null,
+            "m3_score": null
+          },
+          "core_cpi": {},
+          "core_pce": {},
+          "recent": null,
+          "yoy": null
+        }
+      },
+      "overall": 26.47001811594203,
+      "structure": {
+        "level": "정상",
+        "count": 0.0,
+        "items": [],
+        "inversion_memory": 0.0,
+        "last_inversion": null
+      }
+    },
+    "missing_cape": {
+      "scores": {
+        "시장·밸류에이션": 11.153846153846153,
+        "변동성": 13.25,
+        "금리": 38.66666666666667,
+        "신용": 14.075000000000001,
+        "경기": 32.35,
+        "물가": 19.999999999999687
+      },
+      "details": {
+        "market": {
+          "dev": 0.0,
+          "cape": null,
+          "over": 15.0,
+          "valuation": null,
+          "momentum": 2.5,
+          "mom20": 0.0
+        },
+        "volatility": {
+          "level": 20.0,
+          "score": 5.0,
+          "pct": 0.0,
+          "points": 0.0
+        },
+        "rates": {
+          "level": 48.333333333333336,
+          "rise": 10.0,
+          "rise_delta": 0.0,
+          "curve": 60.0,
+          "curve_value": 0.0,
+          "policy": 45.0,
+          "policy_value": 0.0,
+          "tp": 35.0,
+          "tp_value": 0.3
+        },
+        "credit": {
+          "hy_abs": 18.5,
+          "bbb_abs": 20.0,
+          "fast5": 5.0,
+          "trend20": 5.0
+        },
+        "economy": {
+          "unemp": 25.0,
+          "sahm": 5.0,
+          "sahm_raw": 5.0,
+          "sahm_value": 0.0,
+          "claims": 66.0,
+          "claims_confirm": 0.0,
+          "claims_level": 100.0,
+          "claims_trend": 15.0,
+          "claims_trend_pct": 0.0
+        },
+        "inflation": {
+          "headline": {
+            "yoy": 2.0000000000000018,
+            "m3": 1.9999999999999352,
+            "yoy_score": 20.000000000000053,
+            "m3_score": 19.999999999999353
+          },
+          "core_cpi": {
+            "yoy": 2.0000000000000018,
+            "m3": 1.9999999999999352,
+            "yoy_score": 20.000000000000053,
+            "m3_score": 19.999999999999353
+          },
+          "core_pce": {
+            "yoy": 2.0000000000000018,
+            "m3": 1.9999999999999352,
+            "yoy_score": 20.000000000000053,
+            "m3_score": 19.999999999999353
+          },
+          "recent": 19.999999999999353,
+          "yoy": 20.000000000000053
+        }
+      },
+      "overall": 22.990878205128183,
+      "structure": {
+        "level": "정상",
+        "count": 0.0,
+        "items": [],
+        "inversion_memory": 0.0,
+        "last_inversion": null
+      }
+    },
+    "short_history": {
+      "scores": {
+        "시장·밸류에이션": null,
+        "변동성": 20.0,
+        "금리": 48.22222222222223,
+        "신용": 18.961538461538463,
+        "경기": 25.0,
+        "물가": null
+      },
+      "details": {
+        "market": {
+          "dev": null,
+          "cape": null,
+          "mom20": null
+        },
+        "volatility": {
+          "level": 20.0,
+          "score": null,
+          "pct": null,
+          "points": null
+        },
+        "rates": {
+          "level": 48.333333333333336,
+          "rise": null,
+          "rise_delta": null,
+          "curve": 60.0,
+          "curve_value": 0.0,
+          "policy": 45.0,
+          "policy_value": 0.0,
+          "tp": 35.0,
+          "tp_value": 0.3
+        },
+        "credit": {
+          "hy_abs": 18.5,
+          "bbb_abs": 20.0,
+          "fast5": null,
+          "trend20": null
+        },
+        "economy": {
+          "unemp": 25.0,
+          "sahm": null,
+          "sahm_raw": null,
+          "sahm_value": null,
+          "claims": null,
+          "claims_confirm": 0.0,
+          "claims_level": null,
+          "claims_trend": null,
+          "claims_trend_pct": null
+        },
+        "inflation": {
+          "headline": {
+            "yoy": null,
+            "m3": null,
+            "yoy_score": null,
+            "m3_score": null
+          },
+          "core_cpi": {
+            "yoy": null,
+            "m3": null,
+            "yoy_score": null,
+            "m3_score": null
+          },
+          "core_pce": {
+            "yoy": null,
+            "m3": null,
+            "yoy_score": null,
+            "m3_score": null
+          },
+          "recent": null,
+          "yoy": null
+        }
+      },
+      "overall": 31.566845260875112,
+      "structure": {
+        "level": "정상",
+        "count": 0.0,
+        "items": [],
+        "inversion_memory": 0.0,
+        "last_inversion": null
+      }
+    }
+  },
+  "function_ast_sha256": {
+    "latest": "e183f138c45ce7898a3a811ca86a23450ef0c4385d19eb32b850a5e871a23772",
+    "second": "6fee78f80de93679137060bf49b8ab73c0fb41388767847c33e6dd6e6fa3b8ca",
+    "clamp": "9c272ef14e9ad8348ac79682f8d5a1387c244dc34c4f0242719e16713ab3640d",
+    "interp_score": "42a214e4ac350de82922efaec148990e780722c1f3d2e56fb4d7801b93e751c4",
+    "percentile_score": "bdd97405a023ea15e2deed2fbcf76e132fcfcb5e4a3dc90cdc84eb985d926cf1",
+    "weighted": "3053b435e07972b9430dccc3b1eea6ab2eb6fb88491f5e85ee208b3ac6709a47",
+    "weighted_custom": "f06ebb8b86c9b413d75b2c9ca3a84764ae1d7c0436a34168707943bfdbd4f861",
+    "market_overheat_from_dev": "b63bdd4394e7b62b468e21a4198d640e775de75845e710603910366e57b1c5ff",
+    "cape_score": "77e1d60e0147e36a1e7f99335218f48af782818299d9c7116ee5840381aa5ae8",
+    "market_momentum_score": "208e37170c049bc06acca4dbd59e0cb608aaacf37e69f2b3fb3ec8edd522ba2d",
+    "market_risk_score": "bc2e101c553f229a6f4a63fd80eb0d9eb72934bcf2eb326d66328fffca56bd3b",
+    "vix_surge_detail": "5e34cf50814baeb5468c44c2bc5709b5fb9b2796a4057712d8483f0fecefae63",
+    "volatility_score": "14dd78c6730c59d49c30eb6bc1865e2dce217a50e8989a0a4239d34235d2794e",
+    "sahm_series": "0652f19e89cf0d5d4c050a5478c6b61da4b134e2c25185931731f560bca9afcd",
+    "sahm_score": "68c798e681d7af86d447cb454f030d7e86b6af2d4362f6925f12056f17c8544f",
+    "rate_rise_score": "01f2330bdb29dccd1954d7b01c7a72b9cae9d951a90cbde3b4d0e5ab8bfc2431",
+    "rate_score": "55ae60e9c4a5405154d75851c3153f04c63d79443b2d95fab5171be575b227c3",
+    "spread_change_score": "5afd96111ad6549c60e9c45aa56649f91b869200bd4d37f9dea3db35906ef1d5",
+    "credit_score": "84c209c19d1bdde2d4af42adaf160893a93d90f965f9bc39211049eb8bfc6146",
+    "claims_score": "6b31c9533af4dd4613490325841133833bda08b898b89819121136532c686ef8",
+    "economy_score": "e80721e85949d8bdb15a32952261708b9dc513d4cfbab733f7b939f19d39c6c4",
+    "_annualized_3m": "ed6e5c86c88b8c97f755530f4799c214b40a4ea7102677a3177a6c61b82e1715",
+    "inflation_level_score": "13e0227f2ec82331c7ce7f5b45b43b0494a2fffb84e7042fa67a06eb9936d97c",
+    "inflation_momentum_score": "7c257c851c931f3e5916e00f89abd4e8f4859b3e218ec5a0941858eb5570b36f",
+    "_inflation_metric": "7a9809a8073f545bbb70e9ccf9507194e0d01fb732d3d5ae797e6ccacffd99e0",
+    "inflation_score": "fd51bb29af9358c6fe6c3a12519eb25bc15f391895b5f50fd2f261dbe0613b1d",
+    "inversion_memory": "cbf70ba6f414d04466859c70e5109c70ea627473160ed8b95b7a0812d807258a",
+    "structural_signals": "b71de482adc8528bac9c45790c79a59c2caf62750fd84ab00ee1a81ddcaf2f3d",
+    "fast_signal_scores": "e5c3d2eddd643c115e3c42a82b1408f7f574a83d967cc364ad177db508c9d4b4",
+    "rapid_alert": "49797ec3768fb16f84423f05199fc15ecf98d4fa68807de599cfd89a308745e5",
+    "signal_floor": "942e8a041e9f99f39c1c727790f5ef4f3fc514591a621188e4e18185838f30a9",
+    "active_market_stress": "e0716025b86dcccce9cbf98efaa5861257ba0f13752114b29855c9a6fa435dd8",
+    "apply_risk_floors": "bb3afdb958c471ea00900ee52c9fcbd226b5fb4b3728515ce4fe5e34a57a025a",
+    "_truncate_one": "282a1dd77b73a95d5e9ea0ffc4a9e18d113806fa61fb781ecd29587036fd104c",
+    "compute_snapshot": "503da04c4355eef0e08bf00f6c4a5a9155352a22bdad835c64623c2c60aa0cd0",
+    "label": "a1e48b2a00bfccf1252d35758b3c971cc2d743f3432c140db05b02fee3e50ce0",
+    "risk_class": "81888b674f1125ee37ecbc47b8888e130bc8af651b8a6ed8c6b909cfac143f87",
+    "delta_value": "f51e4d071b19fd42da4f1267e196728861910117d1df989add07b54938bbc76b"
+  }
+}

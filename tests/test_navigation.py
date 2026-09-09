@@ -28,14 +28,15 @@ class NavigationTests(unittest.TestCase):
                 app.run(timeout=20)
                 app.session_state['_test_session_marker'] = 'preserved'
                 buttons = {b.key: b for b in app.button}
-                self.assertEqual({b.label for b in app.sidebar.button if b.key.startswith('nav_')},
-                                 {'대시보드','S&P500 시장 맵','위험지수','시장 상태','뉴스'})
+                self.assertEqual({b.label for b in app.button if b.key.startswith('nav_')},
+                                 {'홈','시장맵','위험지수','시장 상태','뉴스'})
                 category = next(b for b in app.button if b.label.startswith('물가 ·'))
                 app.button(key=category.key).click().run(timeout=20)
                 self.assertEqual(app.query_params['news_category'], ['물가'])
                 text = '\n'.join(m.value for m in app.markdown)
                 self.assertIn('물가 발표', text)
                 self.assertNotIn('연준 발표', text)
+                app.text_input(key='news_search').set_value('물가').run(timeout=20)
                 app.button(key='theme_toggle').click().run(timeout=20)
                 self.assertEqual(app.query_params['theme'], ['dark'])
                 app.button(key='nav_heatmap').click().run(timeout=20)
@@ -46,6 +47,7 @@ class NavigationTests(unittest.TestCase):
                 self.assertEqual(app.query_params['news_category'], ['물가'])
                 self.assertEqual(app.query_params['theme'], ['dark'])
                 self.assertEqual(app.session_state['_test_session_marker'], 'preserved')
+                self.assertEqual(app.text_input(key='news_search').value,'물가')
                 self.assertFalse(app.exception, [x.message for x in app.exception])
                 request.assert_not_called()
 

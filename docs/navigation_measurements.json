@@ -1,0 +1,31 @@
+{
+  "method": "click capture to route footer plus two requestAnimationFrame callbacks; paint approximation, not frame capture",
+  "environment": "local QA wrapper, synthetic cached data, module reloads enabled",
+  "samples": [
+    {
+      "ms": "1426.6",
+      "page": "위험지수",
+      "scroll": 0
+    },
+    {
+      "ms": "1704.8",
+      "page": "시장 상태",
+      "scroll": 0
+    },
+    {
+      "ms": "1512.5",
+      "page": "뉴스",
+      "scroll": 0
+    },
+    {
+      "ms": "208.6",
+      "page": "시장맵",
+      "scroll": 0
+    },
+    {
+      "ms": "157.0",
+      "page": "뉴스",
+      "scroll": 0
+    }
+  ]
+}
